@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CheckCircle2, X, Loader2, Building2, MapPin, AlertCircle, Zap, ChevronDown, ChevronUp, Sparkles, RefreshCw, FileText, Download, ExternalLink, Mail, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApplicationProgressModal } from '@/components/application/ApplicationProgressModal';
+import { EmailApplicationSuccessModal } from '@/components/application/EmailApplicationSuccessModal';
 import { CompanyLogo } from '@/components/common/CompanyLogo';
 import { EmailListView, EmailPreview } from './EmailListView';
 
@@ -69,6 +70,8 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
   const [applying, setApplying] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressId, setProgressId] = useState<string | null>(null);
+  const [showEmailSuccessModal, setShowEmailSuccessModal] = useState(false);
+  const [emailSuccessSummary, setEmailSuccessSummary] = useState<{ queued: number; failed: number } | null>(null);
   
   // Tab management
   const [activeTab, setActiveTab] = useState<'summaries' | 'resumes' | 'emails'>('summaries');
@@ -388,6 +391,7 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
             if (previewResult.success && previewResult.data?.emails && previewResult.data.emails.length > 0) {
               setEmailPreview(previewResult.data.emails);
               setActiveTab('emails');
+              setIsGeneratingEmails(false); // Stop loading when emails are successfully retrieved
               toast.success('Emails Generated', {
                 description: `Generated ${previewResult.data.emails.length} personalized emails`,
                 duration: 3000,
@@ -400,6 +404,8 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
               console.log(`Email preview not ready yet (attempt ${attempts + 1}/${maxAttempts})`);
             } else {
               console.error('Failed to get email preview:', error);
+              // For non-404 errors, we might want to stop polling and show error
+              // But for now, continue polling as 404 is the expected case
             }
           }
           
@@ -407,28 +413,31 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
           if (attempts < maxAttempts) {
             setTimeout(pollForEmails, 2000); // Poll every 2 seconds
           } else {
+            setIsGeneratingEmails(false); // Stop loading on timeout
             toast.error('Email Generation Timeout', {
               description: 'Emails are still being generated. Please try again in a moment.',
               duration: 5000,
             });
-            setIsGeneratingEmails(false);
           }
         };
         
         // Start polling after a short delay to allow backend to start processing
         setTimeout(pollForEmails, 3000);
+      } else {
+        // If no progressId was returned, stop loading immediately
+        setIsGeneratingEmails(false);
       }
     } catch (err) {
       console.error('Email generation failed:', err);
       const error = err as { response?: { data?: { error?: string; message?: string } } };
       const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Failed to generate emails. Please try again.';
+      setIsGeneratingEmails(false); // Stop loading on error
       toast.error('Email Generation Failed', {
         description: errorMsg,
         duration: 5000,
       });
-    } finally {
-      setIsGeneratingEmails(false);
     }
+    // Removed finally block - loading state is now managed in each code path
   };
 
   // Handle email update
@@ -488,19 +497,48 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
     
     setApplying(true);
     try {
-      const result = await finalizeEmails(emailProgressId);
+      // Build mapping of jobId -> pdfDownloadUrl for resumes that were generated
+      const resumeDownloads: Record<string, string> = {};
+      emailPreview.forEach(email => {
+        const resumeState = resumes.get(email.jobId);
+        if (resumeState?.pdfDownloadUrl) {
+          resumeDownloads[email.jobId] = resumeState.pdfDownloadUrl;
+        }
+      });
+
+      // If multiple jobs are selected, require a generated resume for each
+      if (emailPreview.length > 1) {
+        const jobsWithoutResume = emailPreview.filter(email => !resumeDownloads[email.jobId]);
+        if (jobsWithoutResume.length > 0) {
+          setApplying(false);
+          toast.error('Resume Required', {
+            description: 'Please generate resumes for all selected jobs before sending emails.',
+            duration: 5000,
+          });
+          return;
+        }
+      }
+
+      const result = await finalizeEmails(emailProgressId, resumeDownloads);
       
       if (result.success) {
-        toast.success('Emails Queued', {
-          description: `${result.data.queued} email${result.data.queued > 1 ? 's' : ''} queued for sending`,
-          duration: 3000,
+        const queued = result.data?.queued ?? 0;
+        const failed = result.data?.failed ?? 0;
+
+        toast.success('Applications Sent Successfully', {
+          description: `${queued} application${queued === 1 ? '' : 's'} sent successfully${failed > 0 ? `, ${failed} failed` : ''}.`,
+          duration: 4000,
         });
-        
-        // Close modal
+
+        // Close bulk modal & clear state
         setShowBulkModal(false);
         setEmailPreview([]);
         setEmailProgressId(null);
         clearSelection();
+
+        // Show success modal with confetti & stats
+        setEmailSuccessSummary({ queued, failed });
+        setShowEmailSuccessModal(true);
       }
     } catch (err) {
       console.error('Finalize failed:', err);
@@ -639,9 +677,25 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
     return summaryState && summaryState.summary && summaryState.summary.trim().length > 0;
   }).length;
 
+  // Determine if user can generate emails:
+  // All selected jobs must have a professional summary and a generated resume.
+  const canGenerateEmails = selectedJobsList.length > 0 && selectedJobsList.every(job => {
+    const summaryState = summaries.get(job._id);
+    const resumeState = resumes.get(job._id);
+    const hasSummary =
+      summaryState &&
+      typeof summaryState.summary === 'string' &&
+      summaryState.summary.trim().length > 0;
+    const hasResume =
+      !!resumeState &&
+      typeof resumeState.pdfDownloadUrl === 'string' &&
+      resumeState.pdfDownloadUrl.trim().length > 0;
+    return hasSummary && hasResume;
+  });
+
   // CRITICAL: Don't return null if modal is open - that would unmount the modal!
-  // Keep the component mounted as long as the progress modal is visible
-  if (selectedJobs.size === 0 && !showProgressModal) {
+  // Keep the component mounted as long as the progress modal or email success modal is visible
+  if (selectedJobs.size === 0 && !showProgressModal && !showEmailSuccessModal) {
     return null;
   }
 
@@ -766,7 +820,7 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
             <CardContent className="p-6 overflow-y-auto max-h-[70vh]">
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'summaries' | 'resumes' | 'emails')}>
                 <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="summaries">Summaries</TabsTrigger>
+                  <TabsTrigger value="summaries">Professional Summary</TabsTrigger>
                   <TabsTrigger value="resumes">Resumes</TabsTrigger>
                   <TabsTrigger value="emails">Emails</TabsTrigger>
                 </TabsList>
@@ -1001,28 +1055,25 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                 </TabsContent>
                 
                 <TabsContent value="emails" className="mt-4">
-                  {emailPreview.length === 0 ? (
+                  {emailPreview.length === 0 && !isGeneratingEmails ? (
                     <div className="text-center py-12">
                       <Mail className="h-12 w-12 mx-auto mb-4 text-slate-400" />
                       <p className="text-slate-600 mb-4">Generate personalized emails for your applications</p>
                       <Button
                         onClick={handleGenerateEmails}
-                        disabled={isGeneratingEmails}
+                        disabled={isGeneratingEmails || !canGenerateEmails}
                         size="lg"
                         className="bg-blue-600 hover:bg-blue-700"
                       >
-                        {isGeneratingEmails ? (
-                          <>
-                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                            Generating Emails...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="mr-2 h-5 w-5" />
-                            Generate Emails
-                          </>
-                        )}
+                        <Sparkles className="mr-2 h-5 w-5" />
+                        Generate Emails
                       </Button>
+                    </div>
+                  ) : isGeneratingEmails ? (
+                    <div className="text-center py-12">
+                      <Loader2 className="h-12 w-12 mx-auto mb-4 text-blue-600 animate-spin" />
+                      <p className="text-slate-600 mb-2 font-medium">Generating personalized emails...</p>
+                      <p className="text-sm text-slate-500">This may take a moment. Please wait.</p>
                     </div>
                   ) : (
                     <EmailListView
@@ -1050,45 +1101,50 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
               >
                 Cancel
               </Button>
-              
-              {emailPreview.length > 0 ? (
-                <Button
-                  onClick={handleFinalizeEmails}
-                  disabled={applying || isGeneratingEmails}
-                  size="lg"
-                  className="px-8 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
-                >
-                  {applying ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Sending Emails...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="mr-2 h-5 w-5" />
-                      Send All ({emailPreview.length})
-                    </>
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleBulkApply}
-                  disabled={applying || isGeneratingEmails}
-                  size="lg"
-                  className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
-                >
-                  {applying ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Submitting Applications...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="mr-2 h-5 w-5" />
-                      Confirm & Apply to All
-                    </>
-                  )}
-                </Button>
+
+              {activeTab === 'emails' && (
+                emailPreview.length > 0 ? (
+                  <Button
+                    onClick={handleFinalizeEmails}
+                    disabled={applying || isGeneratingEmails}
+                    size="lg"
+                    className="px-8 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                  >
+                    {applying ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Sending Emails...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="mr-2 h-5 w-5" />
+                        Send All ({emailPreview.length})
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleBulkApply}
+                    // IMPORTANT: Prevent applying until emails are generated.
+                    // The user must first generate email previews in the Emails tab,
+                    // then use the "Send All" button once emails exist.
+                    disabled={true}
+                    size="lg"
+                    className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                  >
+                    {applying ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Submitting Applications...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="mr-2 h-5 w-5" />
+                        Confirm & Apply to All
+                      </>
+                    )}
+                  </Button>
+                )
               )}
             </div>
           </Card>
@@ -1102,6 +1158,14 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
           totalJobs={selectedJobs.size}
           onComplete={handleProgressComplete}
           onClose={handleModalClose}
+        />
+      )}
+
+      {showEmailSuccessModal && emailSuccessSummary && (
+        <EmailApplicationSuccessModal
+          queued={emailSuccessSummary.queued}
+          failed={emailSuccessSummary.failed}
+          onClose={() => setShowEmailSuccessModal(false)}
         />
       )}
     </>
