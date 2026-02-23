@@ -393,7 +393,7 @@ Best regards,
               onClick={handleSendApplications}
               disabled={isSending || selectedCount === 0}
               size="lg"
-              className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+              className="px-8"
             >
               {isSending ? (
                 <>

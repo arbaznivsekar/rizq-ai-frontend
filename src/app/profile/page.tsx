@@ -269,7 +269,8 @@ export default function ProfilePage() {
       console.log('Save response:', response);
       if (response.success) {
         toast.success('Profile updated successfully!');
-        setShowProfileCard(true); // Show profile card after successful save
+        // Stay in edit mode after save so the user can continue editing.
+        // The user can manually exit to the profile view using the Exit button.
         await fetchProfile(); // Refresh data
         await refreshUser(); // Refresh user data in AuthContext to update header
       }
@@ -1685,14 +1686,14 @@ export default function ProfilePage() {
           </Tabs>
         )}
 
-        {/* Floating Save Button (Only show in form mode) */}
+        {/* Floating Save / Exit Buttons (Only show in form mode) */}
         {!showProfileCard && (
-          <div className="fixed bottom-4 right-4 z-50">
+          <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3">
             <Button
               onClick={handleSave}
               disabled={saving}
               size="lg"
-              className="shadow-2xl px-8 h-14 text-base font-semibold bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+              className="shadow-2xl px-8 h-14 text-base font-semibold"
             >
               {saving ? (
                 <>
@@ -1705,6 +1706,15 @@ export default function ProfilePage() {
                   Save Profile
                 </>
               )}
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="h-14 px-6"
+              disabled={saving}
+              onClick={() => setShowProfileCard(true)}
+            >
+              Exit
             </Button>
           </div>
         )}

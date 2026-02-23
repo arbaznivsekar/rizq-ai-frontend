@@ -367,12 +367,14 @@ export const regenerateEmail = async (progressId: string, emailIndex: number) =>
 
 export const finalizeEmails = async (
   progressId: string,
-  resumeDownloads?: Record<string, string>
+  resumeDownloads?: Record<string, string>,
+  jobIds?: string[]
 ) => {
   const response = await api.post(`/workflow/apply/preview/${progressId}/finalize`, {
     ...(resumeDownloads && Object.keys(resumeDownloads).length > 0
       ? { resumeDownloads }
-      : {})
+      : {}),
+    ...(jobIds && jobIds.length > 0 ? { jobIds } : {})
   });
   return response.data;
 };

@@ -65,7 +65,7 @@ interface ResumeState {
 }
 
 export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
-  const { selectedJobs, clearSelection } = useJobSelection();
+  const { selectedJobs, clearSelection, toggleJobSelection } = useJobSelection();
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [applying, setApplying] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -491,6 +491,35 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
     }
   };
 
+  // Handle removing a single email/application (for unverified emails)
+  const handleRemoveEmailApplication = (emailIndex: number, jobId: string) => {
+    // Remove email preview entry
+    setEmailPreview(prev => prev.filter(email => email.emailIndex !== emailIndex));
+
+    // Clear resume for this job
+    setResumes(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(jobId);
+      return newMap;
+    });
+
+    // Clear professional summary for this job
+    setSummaries(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(jobId);
+      return newMap;
+    });
+
+    // Allow the user to re-use this slot by unselecting the job
+    // so they can pick another job without losing other selections.
+    toggleJobSelection(jobId);
+
+    toast.info('Application removed', {
+      description: 'This job has been removed from your current email batch.',
+      duration: 3000,
+    });
+  };
+
   // Handle finalize and send emails
   const handleFinalizeEmails = async () => {
     if (!emailProgressId) return;
@@ -519,7 +548,11 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
         }
       }
 
-      const result = await finalizeEmails(emailProgressId, resumeDownloads);
+      const result = await finalizeEmails(
+        emailProgressId,
+        resumeDownloads,
+        emailPreview.map(email => email.jobId)
+      );
       
       if (result.success) {
         const queued = result.data?.queued ?? 0;
@@ -730,7 +763,7 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                   onClick={() => setShowBulkModal(true)}
                   size="lg"
                   disabled={!isMinimumMet}
-                  className="px-6 h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 h-12 text-base font-semibold"
                 >
                   <Zap className="mr-2 h-5 w-5" />
                   One-Click Apply to All
@@ -777,7 +810,6 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                   onClick={handleGenerateAllSummaries}
                   disabled={isGeneratingAll || applying || isGeneratingAllResumes}
                   variant="outline"
-                  className="border-purple-300 bg-purple-50 hover:bg-purple-100"
                 >
                   {isGeneratingAll ? (
                     <>
@@ -796,7 +828,6 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                   onClick={handleGenerateAllResumes}
                   disabled={isGeneratingAllResumes || applying || isGeneratingAll}
                   variant="outline"
-                  className="border-green-300 bg-green-50 hover:bg-green-100"
                 >
                   {isGeneratingAllResumes ? (
                     <>
@@ -904,7 +935,6 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                                       size="sm"
                                       onClick={() => handleGenerateSummary(job)}
                                       disabled={summaryState?.isGenerating || isGeneratingAll}
-                                      className="bg-purple-600 hover:bg-purple-700"
                                     >
                                       {summaryState?.isGenerating ? (
                                         <>
@@ -985,7 +1015,6 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                                 size="sm"
                                 onClick={() => handleGenerateResume(job)}
                                 disabled={resumes.get(job._id)?.isGenerating || isGeneratingAllResumes}
-                                className="bg-green-600 hover:bg-green-700"
                               >
                                 {resumes.get(job._id)?.isGenerating ? (
                                   <>
@@ -1063,7 +1092,6 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                         onClick={handleGenerateEmails}
                         disabled={isGeneratingEmails || !canGenerateEmails}
                         size="lg"
-                        className="bg-blue-600 hover:bg-blue-700"
                       >
                         <Sparkles className="mr-2 h-5 w-5" />
                         Generate Emails
@@ -1081,6 +1109,7 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                       onUpdate={handleEmailUpdate}
                       onRegenerate={handleEmailRegenerate}
                       isGenerating={isGeneratingEmails}
+                      onRemove={(emailIndex, jobId) => handleRemoveEmailApplication(emailIndex, jobId)}
                     />
                   )}
                 </TabsContent>
@@ -1108,7 +1137,7 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                     onClick={handleFinalizeEmails}
                     disabled={applying || isGeneratingEmails}
                     size="lg"
-                    className="px-8 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800"
+                    className="px-8"
                   >
                     {applying ? (
                       <>
@@ -1130,7 +1159,7 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                     // then use the "Send All" button once emails exist.
                     disabled={true}
                     size="lg"
-                    className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                    className="px-8"
                   >
                     {applying ? (
                       <>

@@ -26,13 +26,15 @@ interface EmailListViewProps {
   onUpdate: (emailIndex: number, subject: string, body: string, recipientEmail?: string) => Promise<void>;
   onRegenerate: (emailIndex: number) => Promise<void>;
   isGenerating: boolean;
+  onRemove: (emailIndex: number, jobId: string) => void;
 }
 
 export function EmailListView({
   emails,
   onUpdate,
   onRegenerate,
-  isGenerating
+  isGenerating,
+  onRemove,
 }: EmailListViewProps) {
   const [editingStates, setEditingStates] = useState<Map<number, { subject: string; body: string; recipientEmail: string }>>(new Map());
   const [savingStates, setSavingStates] = useState<Set<number>>(new Set());
@@ -166,18 +168,28 @@ export function EmailListView({
                   </CardTitle>
                   <div className="flex items-center gap-2 mt-1 text-sm text-slate-600">
                     <span>{email.companyName}</span>
-                    <span>•</span>
-                    <div className="flex items-center gap-1">
-                      <Mail className="h-4 w-4" />
-                      <span className={email.isPlaceholder ? 'text-orange-600 font-medium' : ''}>
-                        {email.recipientEmail}
-                      </span>
-                      {email.isPlaceholder && (
-                        <Badge variant="outline" className="text-xs border-orange-300 text-orange-600">
-                          Verify Email
+                    {email.isPlaceholder && (
+                      <>
+                        <span>•</span>
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-orange-300 text-orange-600 bg-orange-50"
+                          title="This email address is unverified and may have a high chance of not being delivered to the recruiter."
+                        >
+                          Unverified email
                         </Badge>
-                      )}
-                    </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={isRegenerating || isGenerating}
+                          onClick={() => onRemove(email.emailIndex, email.jobId)}
+                        >
+                          Remove
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -215,25 +227,6 @@ export function EmailListView({
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {email.isPlaceholder && (
-                <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-700 mb-4">
-                  <p className="font-medium mb-1">⚠️ Email Address Not Verified</p>
-                  <p className="text-xs">This email address was not found automatically. Please verify and update it before sending.</p>
-                </div>
-              )}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Recipient Email</label>
-                <Input
-                  value={editingState.recipientEmail}
-                  onChange={(e) => handleFieldChange(email.emailIndex, 'recipientEmail', e.target.value)}
-                  placeholder="recipient@company.com"
-                  disabled={isRegenerating || isGenerating}
-                  className={email.isPlaceholder ? 'border-orange-300 focus:border-orange-500' : ''}
-                />
-                {email.isPlaceholder && (
-                  <p className="text-xs text-orange-600">Please verify this email address is correct</p>
-                )}
-              </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Subject</label>
                 <Input

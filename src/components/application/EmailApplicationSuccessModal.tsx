@@ -28,11 +28,9 @@ export function EmailApplicationSuccessModal({
     // Multi-burst celebration similar to ApplicationProgressModal
     const timeouts: NodeJS.Timeout[] = [];
 
-    const scheduleBurst = (delay: number, options: Parameters<ConfettiRef['fire']>[0]) => {
+    const scheduleBurst = (delay: number, options: Parameters<NonNullable<ConfettiRef>['fire']>[0]) => {
       const timeout = setTimeout(() => {
-        ref.fire(options).catch(() => {
-          // Ignore confetti errors – visual only
-        });
+        ref?.fire(options);
       }, delay);
       timeouts.push(timeout);
     };
