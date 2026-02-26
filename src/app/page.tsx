@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { searchJobs, checkApplicationEligibility } from '@/lib/api';
@@ -38,7 +38,8 @@ interface ApplicationStatus {
   };
 }
 
-export default function HomePage() {
+// Separate component that uses useSearchParams
+function HomePageContent() {
   const { selectedJobs, toggleJobSelection } = useJobSelection();
   const { user } = useAuth();
   const searchParams = useSearchParams();
@@ -678,11 +679,6 @@ export default function HomePage() {
                           {(job.salaryMax / 100000).toFixed(1)} LPA
                         </Badge>
                       )}
-                      {/* {isAlreadyApplied && jobStatus?.daysUntilReapply !== undefined && jobStatus.daysUntilReapply > 0 && (
-                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
-                         Reapply in {jobStatus.daysUntilReapply} days
-                        </Badge>
-                      )} */}
                     </div>
                       </div>
                   </div>
@@ -780,5 +776,18 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+// Main component with Suspense boundary
+export default function HomePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+      </div>
+    }>
+      <HomePageContent />
+    </Suspense>
   );
 }
