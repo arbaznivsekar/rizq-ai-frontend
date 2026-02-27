@@ -1,4 +1,4 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
@@ -157,10 +157,9 @@ const authApi = axios.create({
 
 function attachAuthHeader(config: InternalAxiosRequestConfig) {
   if (accessToken) {
-    if (!config.headers) {
-      config.headers = {};
-    }
-    (config.headers as Record<string, string>).Authorization = `Bearer ${accessToken}`;
+    const headers = AxiosHeaders.from(config.headers);
+    headers.set('Authorization', `Bearer ${accessToken}`);
+    config.headers = headers;
   }
   return config;
 }
