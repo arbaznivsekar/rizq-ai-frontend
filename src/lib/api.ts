@@ -1,39 +1,205 @@
-import axios from 'axios';
+import axios, { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
+type AuthSuccessResponse = {
+  success: true;
+  token: string;
+  refreshToken: string;
+  expiresIn: number;
+  user: unknown;
+};
+
+type AuthErrorResponse = {
+  success: false;
+  error: string;
+};
+
+type AuthResponse = AuthSuccessResponse | AuthErrorResponse;
+
+type StoredTokens = {
+  accessToken: string;
+  refreshToken: string;
+  /**
+   * Absolute expiry timestamp in ms (optional safety net)
+   */
+  expiresAt?: number;
+};
+
+const TOKEN_STORAGE_KEY = 'rizq_auth_tokens';
+
+let accessToken: string | null = null;
+let refreshToken: string | null = null;
+let refreshPromise: Promise<void> | null = null;
+
+const isBrowser = typeof window !== 'undefined';
+
+/**
+ * Persist tokens to localStorage (browser only).
+ */
+function persistTokens(tokens: StoredTokens | null) {
+  if (!isBrowser) return;
+  if (!tokens) {
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    return;
+  }
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens));
+}
+
+export function loadAuthTokensFromStorage() {
+  if (!isBrowser) return;
+  try {
+    const raw = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as StoredTokens;
+    if (parsed.expiresAt && parsed.expiresAt < Date.now()) {
+      // Expired - clear
+      persistTokens(null);
+      accessToken = null;
+      refreshToken = null;
+      return;
+    }
+    accessToken = parsed.accessToken;
+    refreshToken = parsed.refreshToken;
+  } catch {
+    // Corrupted storage - clear it
+    persistTokens(null);
+    accessToken = null;
+    refreshToken = null;
+  }
+}
+
+export function setAuthTokens(data: { accessToken: string; refreshToken: string; expiresIn?: number }) {
+  accessToken = data.accessToken;
+  refreshToken = data.refreshToken;
+
+  const expiresAt =
+    typeof data.expiresIn === 'number' && data.expiresIn > 0
+      ? Date.now() + data.expiresIn * 1000
+      : undefined;
+
+  persistTokens({
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    expiresAt,
+  });
+}
+
+export function clearAuthTokens() {
+  accessToken = null;
+  refreshToken = null;
+  persistTokens(null);
+}
+
+export function getAuthTokens(): { accessToken: string | null; refreshToken: string | null } {
+  return { accessToken, refreshToken };
+}
+
+/**
+ * Ensure we have a fresh access token using the stored refresh token.
+ * Uses a single-flight promise so concurrent 401s share the same refresh.
+ */
+async function ensureAccessTokenRefreshed(): Promise<string | null> {
+  if (!refreshToken) {
+    return null;
+  }
+
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const response = await authApi.post<AuthResponse>('/auth/refresh', {
+          refreshToken,
+        });
+
+        const data = response.data;
+        if (data && (data as AuthSuccessResponse).success) {
+          const success = data as AuthSuccessResponse;
+          setAuthTokens({
+            accessToken: success.token,
+            refreshToken: success.refreshToken,
+            expiresIn: success.expiresIn,
+          });
+        } else {
+          clearAuthTokens();
+        }
+      } catch (error) {
+        clearAuthTokens();
+        if (process.env.NODE_ENV !== 'production') {
+          // eslint-disable-next-line no-console
+          console.error('Failed to refresh access token', error);
+        }
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+
+  await refreshPromise;
+  return accessToken;
+}
+
 export const api = axios.create({
   baseURL: API_BASE,
-  withCredentials: true,
+  // We no longer rely on cookies; all auth is via Authorization header.
+  withCredentials: false,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor - cookies are sent automatically with withCredentials: true
-api.interceptors.request.use(
-  (config) => {
-    // Cookies are sent automatically with withCredentials: true
-    // No need to manually add Authorization header for cookie-based auth
-    return config;
+// Separate instance without interceptors for refresh calls to avoid recursion.
+const authApi = axios.create({
+  baseURL: API_BASE,
+  headers: {
+    'Content-Type': 'application/json',
   },
-  (error) => {
-    return Promise.reject(error);
+});
+
+function attachAuthHeader(config: InternalAxiosRequestConfig) {
+  if (accessToken) {
+    const headers = AxiosHeaders.from(config.headers);
+    headers.set('Authorization', `Bearer ${accessToken}`);
+    config.headers = headers;
   }
+  return config;
+}
+
+// Request interceptor - attach Authorization header if we have a token
+api.interceptors.request.use(
+  (config) => attachAuthHeader(config),
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle authentication errors
+// Response interceptor to transparently refresh access tokens on 401
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  (error) => {
-    if (error.response?.status === 401) {
-      // Authentication failed - user needs to login
-      console.log('🔒 Authentication failed - user needs to login');
-      // Don't clear localStorage since we're using cookies
-      // The backend will handle cookie expiration
+  (response) => response,
+  async (error: AxiosError) => {
+    const response = error.response;
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    if (!response || !originalRequest) {
+      return Promise.reject(error);
     }
+
+    const status = response.status;
+
+    // Do not attempt refresh for these endpoints
+    const url = originalRequest.url || '';
+    const isAuthEndpoint =
+      url.includes('/auth/login') ||
+      url.includes('/auth/register') ||
+      url.includes('/auth/refresh');
+
+    if (status === 401 && !originalRequest._retry && !isAuthEndpoint && refreshToken) {
+      originalRequest._retry = true;
+
+      const newToken = await ensureAccessTokenRefreshed();
+      if (newToken) {
+        attachAuthHeader(originalRequest);
+        return api(originalRequest);
+      }
+    }
+
     return Promise.reject(error);
   }
 );
