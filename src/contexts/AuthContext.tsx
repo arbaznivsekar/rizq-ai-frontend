@@ -1,7 +1,16 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api, getCurrentUser, login as apiLogin, register as apiRegister } from '@/lib/api';
+import {
+  api,
+  getCurrentUser,
+  login as apiLogin,
+  register as apiRegister,
+  loadAuthTokensFromStorage,
+  setAuthTokens,
+  getAuthTokens,
+  clearAuthTokens,
+} from '@/lib/api';
 import { toast } from 'sonner';
 
 interface User {
@@ -29,20 +38,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Check if user is authenticated on mount
   useEffect(() => {
-    checkAuth();
-    handleAuthCallback();
+    if (typeof window === 'undefined') return;
+
+    // Bootstrap tokens from storage, then handle OAuth callback or regular auth check.
+    loadAuthTokensFromStorage();
+
+    const init = async () => {
+      const handled = await handleAuthCallback();
+      if (!handled) {
+        await checkAuth();
+      }
+      setLoading(false);
+    };
+
+    void init();
   }, []);
 
   const checkAuth = async () => {
     try {
-      console.log('🔍 Checking auth with cookies (HttpOnly)');
-      
+      console.log('🔍 Checking auth with access token');
+
       try {
         const response = await getCurrentUser();
         console.log('✅ Auth check response:', response);
-        
+
         if (response.success && response.user) {
           setUser(response.user);
           console.log('✅ User authenticated:', response.user.email);
@@ -52,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (apiError: any) {
         console.error('❌ API call failed:', apiError.response?.status, apiError.response?.data);
-        
+
         if (apiError.response?.status === 401 || apiError.response?.status === 403) {
           console.log('❌ Authentication failed - user not logged in');
           setUser(null);
@@ -63,56 +83,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('❌ Auth check failed:', error);
       setUser(null);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleAuthCallback = () => {
-    // Handle OAuth callback - check if we're coming from Gmail OAuth
-    const urlParams = new URLSearchParams(window.location.search);
+  const handleAuthCallback = async (): Promise<boolean> => {
+    if (typeof window === 'undefined') return false;
+
+    const { search, hash, pathname } = window.location;
+    const urlParams = new URLSearchParams(search);
     const error = urlParams.get('error');
 
     if (error) {
       console.error('❌ OAuth error:', error);
       toast.error(`Authentication failed: ${error}`);
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return;
+
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.search = '';
+      cleanUrl.hash = '';
+      window.history.replaceState({}, document.title, cleanUrl.toString());
+      return false;
     }
 
-    // Show welcome message on dashboard (OAuth redirect or page refresh)
-    // Only show once per session to avoid duplicate toasts
-    if (window.location.pathname === '/dashboard' && !sessionStorage.getItem('dashboard_welcome_shown')) {
+    // New flow: backend returns tokens in URL hash on /auth/callback
+    if (hash && hash.startsWith('#')) {
+      const params = new URLSearchParams(hash.substring(1));
+      const accessToken = params.get('accessToken');
+      const refreshToken = params.get('refreshToken');
+      const expiresInStr = params.get('expiresIn');
+
+      if (accessToken && refreshToken) {
+        const expiresIn = expiresInStr ? Number(expiresInStr) : undefined;
+        setAuthTokens({ accessToken, refreshToken, expiresIn });
+
+        // Clean up URL (remove tokens from address bar) without changing the route.
+        // Navigation is handled by the /auth/callback page using Next router.
+        const newUrl = new URL(window.location.href);
+        newUrl.search = '';
+        newUrl.hash = '';
+        window.history.replaceState({}, document.title, newUrl.toString());
+
+        await checkAuth();
+
+        if (!sessionStorage.getItem('dashboard_welcome_shown')) {
+          toast.success('Welcome to RIZQ.AI dashboard.');
+          sessionStorage.setItem('dashboard_welcome_shown', 'true');
+        }
+
+        return true;
+      }
+    }
+
+    // Legacy behavior: if we land directly on dashboard, show welcome once.
+    if (pathname === '/dashboard' && !sessionStorage.getItem('dashboard_welcome_shown')) {
       console.log('Dashboard loaded - showing welcome message');
       toast.success('Welcome to RIZQ.AI dashboard.');
       sessionStorage.setItem('dashboard_welcome_shown', 'true');
-      
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      
-      // Immediately check auth and keep checking until successful
-      const checkAuthWithRetry = async (retries = 0) => {
-        try {
-          const response = await getCurrentUser();
-          if (response.success && response.user) {
-            console.log('✅ OAuth authentication successful');
-            setUser(response.user);
-            return;
-          }
-        } catch (error) {
-          console.log(`⏳ Auth check attempt ${retries + 1} failed, retrying...`);
-        }
-        
-        if (retries < 5) {
-          setTimeout(() => checkAuthWithRetry(retries + 1), 1000);
-        } else {
-          console.error('❌ OAuth authentication failed after 5 attempts');
-        }
-      };
-      
-      checkAuthWithRetry();
+
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.search = '';
+      cleanUrl.hash = '';
+      window.history.replaceState({}, document.title, cleanUrl.toString());
     }
+
+    return false;
   };
 
   const loginWithGmail = () => {
@@ -137,13 +170,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await api.post('/auth/logout');
+      const tokens = getAuthTokens();
+      const body = tokens.refreshToken ? { refreshToken: tokens.refreshToken } : undefined;
+      await api.post('/auth/logout', body);
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Clear any localStorage token (fallback)
-      localStorage.removeItem('token');
-      delete api.defaults.headers.common['Authorization'];
+      clearAuthTokens();
       setUser(null);
       toast.success('Logged out successfully');
     }
