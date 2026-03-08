@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle2, Send, XCircle, Clock } from 'lucide-react';
+import { CheckCircle2, Send, XCircle, Clock, Mail } from 'lucide-react';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 
 interface EmailApplicationSuccessModalProps {
@@ -19,6 +19,7 @@ export function EmailApplicationSuccessModal({
   onClose,
 }: EmailApplicationSuccessModalProps) {
   const confettiRef = useRef<ConfettiRef>(null);
+  const [isOpeningGmail, setIsOpeningGmail] = useState(false);
 
   useEffect(() => {
     // Fire celebratory confetti when modal mounts
@@ -119,6 +120,28 @@ export function EmailApplicationSuccessModal({
   const total = queued + failed;
   const progressPercentage = total > 0 ? Math.round((queued / total) * 100) : 0;
 
+  const handleOpenGmail = () => {
+    const gmailUrl = 'https://mail.google.com/mail/u/0/#sent';
+    setIsOpeningGmail(true);
+
+    try {
+      const newWindow = window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+      if (!newWindow) {
+        // Popup blocked – best-effort fallback: copy URL and inform the user.
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(gmailUrl).catch(() => {
+            // ignore clipboard failures
+          });
+        }
+        // eslint-disable-next-line no-alert
+        alert('We opened Gmail or copied the Gmail URL. If a new tab did not open, paste the URL into your browser.');
+      }
+    } finally {
+      // Small delay so the loading state is perceptible but not sticky
+      setTimeout(() => setIsOpeningGmail(false), 300);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
       {/* Confetti overlay */}
@@ -178,7 +201,10 @@ export function EmailApplicationSuccessModal({
               <Send className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-slate-700">
                 {queued > 0 ? (
-                  <p>Your applications have been sent and are being delivered to employers.</p>
+                  <p>
+                    Your applications have been sent and are being delivered to employers.{' '}
+                    Check your Gmail inbox for confirmation emails.
+                  </p>
                 ) : (
                   <p>No applications were sent. Please review and try again.</p>
                 )}
@@ -186,10 +212,37 @@ export function EmailApplicationSuccessModal({
             </div>
           </div>
 
-          {/* Close button */}
-          <Button onClick={onClose} className="w-full" size="lg">
-            Close
-          </Button>
+          {/* Actions */}
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onClick={handleOpenGmail}
+              disabled={isOpeningGmail}
+              aria-label="Open Gmail sent folder in a new tab"
+              className="sm:min-w-[10rem]"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L12 9.366l8.073-5.873C21.69 2.28 24 3.434 24 5.457z" fill="#4285F4"/>
+                <path d="M0 5.457v.727l12 8.727 12-8.727v-.727c0-2.023-2.309-3.178-3.927-1.964L12 9.366 3.927 3.493C2.31 2.28 0 3.434 0 5.457z" fill="#34A853"/>
+                <path d="M18.545 21.002h3.819c.904 0 1.636-.732 1.636-1.636v-6.545l-5.455 4.091v4.09z" fill="#FBBC04"/>
+                <path d="M5.455 21.002V16.91L0 12.82v6.545c0 .904.732 1.636 1.636 1.636h3.819z" fill="#EA4335"/>
+                <path opacity=".1" d="M18.545 11.002V21h3.819c.904 0 1.636-.732 1.636-1.636V11.73l-5.455-.728z" fill="#000"/>
+                <path opacity=".1" d="M1.636 11.002A1.636 1.636 0 0 0 0 12.638v6.728c0 .904.732 1.636 1.636 1.636h3.819V11.73l-3.819-.728z" fill="#000"/>
+              </svg>
+              <span>{isOpeningGmail ? 'Opening Gmail…' : 'Open Gmail Sent Folder'}</span>
+            </Button>
+
+            <Button
+              type="button"
+              onClick={onClose}
+              size="lg"
+              className="sm:min-w-[8rem]"
+            >
+              Close
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
