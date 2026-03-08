@@ -851,9 +851,24 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
             <CardContent className="p-6 overflow-y-auto max-h-[70vh]">
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'summaries' | 'resumes' | 'emails')}>
                 <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="summaries">Professional Summary</TabsTrigger>
-                  <TabsTrigger value="resumes">Resumes</TabsTrigger>
-                  <TabsTrigger value="emails">Emails</TabsTrigger>
+                  <TabsTrigger value="summaries">
+                    <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
+                      1
+                    </span>
+                    <span>Professional Summary</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="resumes">
+                    <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
+                      2
+                    </span>
+                    <span>Resumes</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="emails">
+                    <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
+                      3
+                    </span>
+                    <span>Emails</span>
+                  </TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="summaries" className="mt-4">
