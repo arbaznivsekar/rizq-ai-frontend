@@ -47,22 +47,35 @@ function persistTokens(tokens: StoredTokens | null) {
 }
 
 export function loadAuthTokensFromStorage() {
-  if (!isBrowser) return;
+  if (!isBrowser) {
+    return;
+  }
   try {
+    // eslint-disable-next-line no-console
+    console.log('[auth] Loading tokens from localStorage');
     const raw = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as StoredTokens;
-    if (parsed.expiresAt && parsed.expiresAt < Date.now()) {
-      // Expired - clear
-      persistTokens(null);
-      accessToken = null;
-      refreshToken = null;
+    if (!raw) {
+      // eslint-disable-next-line no-console
+      console.log('[auth] No auth tokens found in storage');
       return;
     }
+    const parsed = JSON.parse(raw) as StoredTokens;
+    // NOTE: We no longer proactively log the user out on the client
+    // when expiresAt has passed. The backend remains the source of
+    // truth for token validity and will return 401 when needed, at
+    // which point the refresh flow or a full logout will occur.
     accessToken = parsed.accessToken;
     refreshToken = parsed.refreshToken;
+    // eslint-disable-next-line no-console
+    console.log('[auth] Loaded auth tokens from storage', {
+      hasAccessToken: !!accessToken,
+      hasRefreshToken: !!refreshToken,
+      expiresAt: parsed.expiresAt,
+    });
   } catch {
     // Corrupted storage - clear it
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Failed to parse stored auth tokens, clearing');
     persistTokens(null);
     accessToken = null;
     refreshToken = null;
@@ -78,6 +91,14 @@ export function setAuthTokens(data: { accessToken: string; refreshToken: string;
       ? Date.now() + data.expiresIn * 1000
       : undefined;
 
+  // eslint-disable-next-line no-console
+  console.log('[auth] Setting auth tokens', {
+    hasAccessToken: !!data.accessToken,
+    hasRefreshToken: !!data.refreshToken,
+    expiresIn: data.expiresIn,
+    computedExpiresAt: expiresAt,
+  });
+
   persistTokens({
     accessToken: data.accessToken,
     refreshToken: data.refreshToken,
@@ -88,10 +109,18 @@ export function setAuthTokens(data: { accessToken: string; refreshToken: string;
 export function clearAuthTokens() {
   accessToken = null;
   refreshToken = null;
+  // eslint-disable-next-line no-console
+  console.log('[auth] Clearing auth tokens');
   persistTokens(null);
 }
 
 export function getAuthTokens(): { accessToken: string | null; refreshToken: string | null } {
+  // Helpful when debugging token state across context and interceptors.
+  // eslint-disable-next-line no-console
+  console.log('[auth] getAuthTokens snapshot', {
+    hasAccessToken: !!accessToken,
+    hasRefreshToken: !!refreshToken,
+  });
   return { accessToken, refreshToken };
 }
 
@@ -101,6 +130,8 @@ export function getAuthTokens(): { accessToken: string | null; refreshToken: str
  */
 async function ensureAccessTokenRefreshed(): Promise<string | null> {
   if (!refreshToken) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Cannot refresh access token - no refresh token present');
     return null;
   }
 
@@ -155,11 +186,41 @@ const authApi = axios.create({
   },
 });
 
+function isPublicAuthEndpoint(url: string) {
+  return (
+    url.includes('/auth/login') ||
+    url.includes('/auth/register') ||
+    url.includes('/auth/refresh') ||
+    url.includes('/auth/google')
+  );
+}
+
+function ensureTokensLoadedForRequest() {
+  if (!accessToken && isBrowser) {
+    // eslint-disable-next-line no-console
+    console.log('[auth] No in-memory access token before request, attempting to load from storage');
+    loadAuthTokensFromStorage();
+  }
+}
+
 function attachAuthHeader(config: InternalAxiosRequestConfig) {
+  ensureTokensLoadedForRequest();
+
+  const url = config.url || '';
+
   if (accessToken) {
     const headers = AxiosHeaders.from(config.headers);
     headers.set('Authorization', `Bearer ${accessToken}`);
     config.headers = headers;
+    // eslint-disable-next-line no-console
+    console.log('[auth] Attached Authorization header to request', {
+      url,
+    });
+  } else if (!isPublicAuthEndpoint(url)) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] Making request to protected endpoint without access token; Authorization header NOT set', {
+      url,
+    });
   }
   return config;
 }
@@ -177,6 +238,14 @@ api.interceptors.response.use(
     const response = error.response;
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.warn('[auth] API response error intercepted', {
+        url: originalRequest?.url,
+        status: response?.status,
+      });
+    }
+
     if (!response || !originalRequest) {
       return Promise.reject(error);
     }
@@ -193,11 +262,20 @@ api.interceptors.response.use(
     if (status === 401 && !originalRequest._retry && !isAuthEndpoint && refreshToken) {
       originalRequest._retry = true;
 
+      // eslint-disable-next-line no-console
+      console.log('[auth] 401 received for protected endpoint, attempting token refresh', {
+        url,
+      });
+
       const newToken = await ensureAccessTokenRefreshed();
       if (newToken) {
+        // eslint-disable-next-line no-console
+        console.log('[auth] Token refresh succeeded, retrying original request');
         attachAuthHeader(originalRequest);
         return api(originalRequest);
       }
+      // eslint-disable-next-line no-console
+      console.warn('[auth] Token refresh failed or no new token available, rejecting request');
     }
 
     return Promise.reject(error);

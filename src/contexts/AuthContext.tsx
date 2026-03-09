@@ -41,8 +41,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    console.log('[auth] AuthProvider mounted, initializing auth state');
+
     // Bootstrap tokens from storage, then handle OAuth callback or regular auth check.
     loadAuthTokensFromStorage();
+
+    const tokensSnapshot = getAuthTokens();
+    console.log('[auth] Tokens after loadAuthTokensFromStorage in AuthProvider effect', {
+      hasAccessToken: !!tokensSnapshot.accessToken,
+      hasRefreshToken: !!tokensSnapshot.refreshToken,
+    });
 
     const init = async () => {
       const handled = await handleAuthCallback();
@@ -57,6 +65,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = async () => {
     try {
+      const { accessToken, refreshToken } = getAuthTokens();
+      console.log('[auth] checkAuth called with tokens snapshot', {
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+      });
+
+      if (!accessToken) {
+        console.warn('[auth] No access token present, skipping /auth/me call');
+        setUser(null);
+
+        if (typeof window !== 'undefined') {
+          const { pathname } = window.location;
+          // Treat dashboard as a protected route; redirect unauthenticated users away.
+          if (pathname.startsWith('/dashboard')) {
+            console.log('[auth] Redirecting unauthenticated user from /dashboard to home');
+            window.location.href = '/';
+          }
+        }
+
+        return;
+      }
+
       console.log('🔍 Checking auth with access token');
 
       try {
@@ -112,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const expiresInStr = params.get('expiresIn');
 
       if (accessToken && refreshToken) {
+        console.log('[auth] Received tokens from OAuth callback, storing and triggering auth check');
         const expiresIn = expiresInStr ? Number(expiresInStr) : undefined;
         setAuthTokens({ accessToken, refreshToken, expiresIn });
 
