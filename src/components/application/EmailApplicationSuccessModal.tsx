@@ -131,23 +131,23 @@ export function EmailApplicationSuccessModal({
       if (isMobile) {
         // Mobile: Try to open Gmail app
         if (isAndroid) {
-          // Android - use intent for better reliability
-          window.location.href = 'intent://mail.google.com/mail/#Intent;scheme=https;package=com.google.android.gm;end';
+          // Android - use intent to open Sent folder
+          window.location.href = 'intent://mail.google.com/mail/u/0/#sent#Intent;scheme=https;package=com.google.android.gm;end';
         } else {
-          // iOS - use googlegmail:// protocol
+          // iOS - use googlegmail:// protocol (opens to main view, can't directly open Sent)
           window.location.href = 'googlegmail://';
         }
         
-        // Fallback to web Gmail if app doesn't open (after 1.5 seconds)
+        // Fallback to web Gmail Sent folder if app doesn't open (after 1.5 seconds)
         setTimeout(() => {
           if (!document.hidden) {
-            // App didn't open, fallback to mobile web
-            window.location.href = 'https://mail.google.com/mail/u/0/#inbox';
+            // App didn't open, fallback to mobile web Sent folder
+            window.location.href = 'https://mail.google.com/mail/u/0/#sent';
           }
         }, 1500);
       } else {
-        // Desktop: Open in new tab
-        const gmailUrl = 'https://mail.google.com/mail/u/0/#inbox';
+        // Desktop: Open Sent folder in new tab
+        const gmailUrl = 'https://mail.google.com/mail/u/0/#sent';
         const newWindow = window.open(gmailUrl, '_blank', 'noopener,noreferrer');
         
         if (!newWindow) {
@@ -228,7 +228,7 @@ export function EmailApplicationSuccessModal({
                 {queued > 0 ? (
                   <p>
                     Your applications have been sent and are being delivered to employers.{' '}
-                    Check your Gmail inbox for confirmation emails.
+                    Check your Gmail Sent folder to confirm.
                   </p>
                 ) : (
                   <p>No applications were sent. Please review and try again.</p>
@@ -245,19 +245,43 @@ export function EmailApplicationSuccessModal({
               size="lg"
               onClick={handleOpenGmail}
               disabled={isOpeningGmail}
-              aria-label="Open Gmail inbox in a new tab"
+              aria-label="Open Gmail sent folder"
               className="sm:min-w-[10rem]"
             >
-              <span
-                aria-hidden="true"
-                className="flex h-5 w-5 items-center justify-center rounded-[4px] bg-white"
+              {/* Real Gmail Logo */}
+              <svg
+                className="w-5 h-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
               >
-                {/* Simple envelope glyph, styled with Gmail-like colors without using external fonts */}
-                <span className="block h-3 w-4 border-[2px] border-red-500 border-t-transparent border-l-red-500 border-r-red-500 border-b-red-500 -translate-y-[1px] rounded-[2px]">
-                  <span className="block h-[7px] w-full border-t-[2px] border-red-500 border-l-transparent border-r-transparent" />
-                </span>
-              </span>
-              <span>{isOpeningGmail ? 'Opening Gmail…' : 'Open Gmail Inbox'}</span>
+                {/* Gmail M shape with correct colors */}
+                <path
+                  d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L12 9.366l8.073-5.873C21.69 2.28 24 3.434 24 5.457z"
+                  fill="#4285F4"
+                />
+                <path
+                  d="M0 5.457v.727l12 8.727 12-8.727v-.727c0-2.023-2.31-3.178-3.927-1.964L12 9.366 3.927 3.493C2.31 2.28 0 3.434 0 5.457z"
+                  fill="#34A853"
+                />
+                <path
+                  d="M18.545 11.73v9.273h3.819c.904 0 1.636-.732 1.636-1.636V11.73L12 16.64z"
+                  fill="#FBBC04"
+                />
+                <path
+                  d="M1.636 21.003h3.819V11.73L0 16.64v2.727c0 .904.732 1.636 1.636 1.636z"
+                  fill="#EA4335"
+                />
+                <path
+                  d="M12 16.64l-6.545-4.91v9.273h6.545V16.64z"
+                  fill="#C5221F"
+                />
+                <path
+                  d="M18.545 11.73L12 16.64v4.363h6.545V11.73z"
+                  fill="#C5221F"
+                />
+              </svg>
+              <span>{isOpeningGmail ? 'Opening Gmail…' : 'Open Gmail Sent'}</span>
             </Button>
 
             <Button
