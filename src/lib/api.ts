@@ -581,11 +581,29 @@ export const getEmailPreview = async (progressId: string) => {
     const response = await api.get(`/workflow/apply/preview/${progressId}`);
     return response.data;
   } catch (error: any) {
-    // Re-throw with more context
-    if (error.response?.status === 404) {
-      throw new Error('Email preview not found or still being generated');
+    const status = error.response?.status;
+
+    // 404 is expected while emails are still being generated
+    if (status === 404) {
+      return {
+        success: false,
+        data: null,
+        status,
+      };
     }
-    throw error;
+
+    console.error("getEmailPreview failed:", error);
+
+    return {
+      success: false,
+      data: null,
+      status,
+      error:
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to load email preview",
+    };
   }
 };
 
