@@ -9,12 +9,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Header } from '@/components/layout/Header';
 import { BulkApplyBar } from '@/components/jobs/BulkApplyBar';
-import { Search, MapPin, Building2, Loader2, CheckCircle } from 'lucide-react';
-import CompanyLogo from '@/components/common/CompanyLogo';
+import { JobListingCard } from '@/components/jobs/JobListingCard';
+import { Search, Loader2, MapPin } from 'lucide-react';
 
 interface Job {
   _id: string;
@@ -535,7 +533,7 @@ function HomePageContent() {
       <Header />
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8 pb-24 max-w-6xl">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Search Card */}
         <Card className="shadow-lg">
           <CardHeader>
@@ -609,7 +607,7 @@ function HomePageContent() {
         {/* Job Results */}
         {!loading && jobs.length > 0 && (
           <>
-          <div className="mt-8 space-y-4">
+          <div className="mt-8 space-y-4 mb-24">
             {jobs.map((job, index) => {
               const jobStatus = applicationStatus[job._id];
               const isAlreadyApplied = jobStatus?.hasApplied && !jobStatus?.canReapply;
@@ -626,100 +624,20 @@ function HomePageContent() {
               }
               
               return (
-                <Card 
-                  key={`${job._id}-${index}`}
-                  id={`job-card-${job._id}`}
-                  className={`hover:shadow-xl transition-all duration-200 ${
-                    selectedJobs.has(job._id) ? 'ring-2 ring-blue-500 bg-blue-50/50' : 
-                    isAlreadyApplied ? 'opacity-75 bg-slate-50' : 'hover:scale-[1.01]'
-                  }`}
-                >
-                <CardHeader>
-                    <div className="flex gap-4">
-                      {/* Checkbox */}
-                      <div className="flex items-start pt-1">
-                        <Checkbox
-                          checked={selectedJobs.has(job._id)}
-                          onCheckedChange={() => !isAlreadyApplied && toggleJobSelection(job._id)}
-                          disabled={isAlreadyApplied}
-                          className="h-5 w-5"
-                        />
-                      </div>
-                      
-                      {/* Job Info */}
-                      <div className="flex-1 flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CardTitle className="text-2xl">{job.title}</CardTitle>
-                        {isAlreadyApplied && (
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Applied
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-base">
-                        <span className="flex items-center gap-2">
-                          <CompanyLogo name={job.company} logoUrl={job.logoUrl} domain={job.companyDomain || job.url} size={48} />
-                          <span className="flex items-center gap-1">
-                            <Building2 className="h-4 w-4" />
-                            {job.company}
-                          </span>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-4 w-4" />
-                          {job.location}
-                        </span>
-                      </CardDescription>
-                    </div>
-                    <div className="flex flex-col gap-2 items-end">
-                      {job.salaryMin && job.salaryMax && (
-                        <Badge variant="secondary" className="text-sm px-3 py-1">
-                          ₹{(job.salaryMin / 100000).toFixed(1)}-
-                          {(job.salaryMax / 100000).toFixed(1)} LPA
-                        </Badge>
-                      )}
-                    </div>
-                      </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-slate-600 mb-4 line-clamp-3 text-base">
-                    {job.description || 'No description available'}
-                  </p>
-                  {job.requirements && job.requirements.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {job.requirements.slice(0, 8).map((skill, idx) => (
-                        <Badge key={idx} variant="outline" className="text-sm">
-                          {skill}
-                        </Badge>
-                      ))}
-                      {job.requirements.length > 8 && (
-                        <Badge variant="outline" className="text-sm">
-                          +{job.requirements.length - 8} more
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                       <Button 
-                         asChild 
-                         className="flex-1"
-                         onClick={() => {
-                           // Save both job ID and pagination state
-                           sessionStorage.setItem('lastViewedJobId', job._id);
-                           savePaginationState();
-                           console.log('💾 Saved job ID and pagination state:', job._id);
-                         }}
-                       >
-                      <Link href={`/jobs/${job._id}`}>
-                        View Details
-                      </Link>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-              );
+                <JobListingCard
+                  key={job._id}
+                  job={job}
+                  isSelected={selectedJobs.has(job._id)}
+                  isAlreadyApplied={!!isAlreadyApplied}
+                  onToggle={() => toggleJobSelection(job._id)}
+                  onViewDetails={() => {
+                    // Save both job ID and pagination state
+                    sessionStorage.setItem('lastViewedJobId', job._id);
+                    savePaginationState();
+                    console.log('💾 Saved job ID and pagination state:', job._id);
+                  }}
+                />
+              )
             })}
           </div>
 

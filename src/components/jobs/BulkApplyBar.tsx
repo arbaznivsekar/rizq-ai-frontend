@@ -1,19 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect,useMemo } from 'react';
 import { useJobSelection } from '@/contexts/JobSelectionContext';
 import { bulkApplyToJobs, generateProfessionalSummary, generateBatchResumes, generateEmailPreview, getEmailPreview, updateEmail, regenerateEmail, finalizeEmails } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { CheckCircle2, X, Loader2, Building2, MapPin, AlertCircle, Zap, ChevronDown, ChevronUp, Sparkles, RefreshCw, FileText, Download, ExternalLink, Mail, Send } from 'lucide-react';
+import { CheckCircle2, X, Loader2, Building2, MapPin,   Sparkles, RefreshCw, FileText, Download,  Mail, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApplicationProgressModal } from '@/components/application/ApplicationProgressModal';
 import { EmailApplicationSuccessModal } from '@/components/application/EmailApplicationSuccessModal';
 import { CompanyLogo } from '@/components/common/CompanyLogo';
 import { EmailListView, EmailPreview } from './EmailListView';
-
+import { SelectedJobsActionBar } from '@/components/jobs/SelectedJobsActionBar';
+import {ApplyJobsModalJobState,} from '@/components/jobs/ApplyJobsModal';
+import { ApplyJobsModal } from '@/components/jobs/ApplyJobsModal';
 const MINIMUM_JOBS_REQUIRED = 1;
 
 /**
@@ -388,7 +388,12 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
         const pollForEmails = async () => {
           try {
             const previewResult = await getEmailPreview(result.data.progressId);
-            if (previewResult.success && previewResult.data?.emails && previewResult.data.emails.length > 0) {
+
+            if (
+              previewResult?.success &&
+              previewResult.data?.emails &&
+              previewResult.data.emails.length > 0
+            ) {
               setEmailPreview(previewResult.data.emails);
               setActiveTab('emails');
               setIsGeneratingEmails(false); // Stop loading when emails are successfully retrieved
@@ -398,17 +403,29 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
               });
               return;
             }
-          } catch (error: any) {
-            // 404 is expected while emails are still being generated
-            if (error.response?.status === 404) {
-              console.log(`Email preview not ready yet (attempt ${attempts + 1}/${maxAttempts})`);
-            } else {
-              console.error('Failed to get email preview:', error);
-              // For non-404 errors, we might want to stop polling and show error
-              // But for now, continue polling as 404 is the expected case
+
+            // If backend reported a hard error (5xx), stop polling and surface it
+            if (previewResult?.status && previewResult.status >= 500) {
+              setIsGeneratingEmails(false);
+              toast.error('Email Preview Failed', {
+                description:
+                  previewResult.error ||
+                  'There was a problem generating email previews. Please try again.',
+                duration: 5000,
+              });
+              return;
             }
+
+            // For 404/not-ready or generic "no data yet", just keep polling
+            if (previewResult?.status === 404 || !previewResult?.success) {
+              console.log(
+                `Email preview not ready yet (attempt ${attempts + 1}/${maxAttempts})`
+              );
+            }
+          } catch (error: any) {
+            console.error('Failed to get email preview:', error);
           }
-          
+
           attempts++;
           if (attempts < maxAttempts) {
             setTimeout(pollForEmails, 2000); // Poll every 2 seconds
@@ -725,6 +742,32 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
       resumeState.pdfDownloadUrl.trim().length > 0;
     return hasSummary && hasResume;
   });
+  const jobStates: Record<string, ApplyJobsModalJobState> = useMemo(() => {
+    const states: Record<string, ApplyJobsModalJobState> = {};
+    selectedJobsList.forEach(job => {
+      const summaryState = summaries.get(job._id);
+      const resumeState = resumes.get(job._id);
+      states[job._id] = {
+        summary: summaryState?.summary,
+        summaryIsGenerating: summaryState?.isGenerating,
+        summaryIsEdited: summaryState?.isEdited,
+        resumeIsGenerating: resumeState?.isGenerating ?? false,
+        resumePdfUrl: resumeState?.pdfUrl
+          ? getProxyPdfUrl(resumeState.pdfDownloadUrl)
+          : undefined,
+        resumeProxyPdfUrl: resumeState?.pdfDownloadUrl
+          ? getProxyPdfUrl(resumeState.pdfDownloadUrl)
+          : undefined,
+        resumeGoogleDocUrl: resumeState?.googleDocUrl,
+        resumeDownloadUrl: resumeState?.pdfDownloadUrl
+          ? getProxyPdfUrl(resumeState.pdfDownloadUrl)
+          : undefined,
+        resumeError: resumeState?.error,
+      };
+    });
+    return states;
+  }, [selectedJobsList, summaries, resumes]);
+
 
   // CRITICAL: Don't return null if modal is open - that would unmount the modal!
   // Keep the component mounted as long as the progress modal or email success modal is visible
@@ -734,466 +777,55 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
 
   return (
     <>
-      {/* Floating Action Bar - Only show if jobs are selected AND modal is not open */}
-      {selectedJobs.size > 0 && !showProgressModal && (
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40  animate-in slide-in-from-bottom-4 duration-300">
-        <Card className={`shadow-2xl border-2 ${isMinimumMet ? 'border-blue-500' : 'border-orange-500'}`}>
-          <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <div className="flex items-center gap-3">
-                {isMinimumMet ? (
-                  <CheckCircle2 className="h-6 w-6 text-blue-600" />
-                ) : (
-                  <AlertCircle className="h-6 w-6 text-orange-600" />
-                )}
-                <div>
-                  <span className="font-semibold text-lg block">
-                    {selectedJobs.size} job{selectedJobs.size > 1 ? 's' : ''} selected
-                  </span>
-                  {!isMinimumMet && (
-                    <span className="text-sm text-orange-600">
-                      Select {remaining} more to apply
-                    </span>
-                  )}
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <Button
-                  onClick={() => setShowBulkModal(true)}
-                  size="lg"
-                  disabled={!isMinimumMet}
-                  className="px-6 h-12 text-base font-semibold"
-                >
-                  <Zap className="mr-2 h-5 w-5" />
-                  One-Click Apply to All
-                </Button>
-                
-                <Button
-                  onClick={clearSelection}
-                  variant="outline"
-                  size="lg"
-                  className="h-12"
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      )} {/* End of Floating Action Bar conditional */}
-
-      {/* Bulk Apply Modal - Keep this outside the Floating Action Bar conditional */}
-      {showBulkModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-6xl max-h-[95vh] overflow-hidden animate-in zoom-in-95 duration-200">
-            <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-indigo-50">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <CardTitle className="text-2xl">Apply to {selectedJobs.size} Selected Jobs</CardTitle>
-                  <CardDescription className="text-base mt-1">
-                    Generate professional summaries tailored for each job
-                  </CardDescription>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowBulkModal(false)}
-                  disabled={applying || isGeneratingAll}
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <Button
-                  onClick={handleGenerateAllSummaries}
-                  disabled={isGeneratingAll || applying || isGeneratingAllResumes}
-                  variant="outline"
-                >
-                  {isGeneratingAll ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2 h-4 w-4 text-purple-600" />
-                      Generate All Summaries
-                    </>
-                  )}
-                </Button>
-                
-                <Button
-                  onClick={handleGenerateAllResumes}
-                  disabled={isGeneratingAllResumes || applying || isGeneratingAll}
-                  variant="outline"
-                >
-                  {isGeneratingAllResumes ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="mr-2 h-4 w-4 text-green-600" />
-                      Generate All Resumes
-                    </>
-                  )}
-                </Button>
-                
-                <span className="text-sm text-slate-600">
-                  {validSummaryCount} summaries | {Array.from(resumes.values()).filter(r => r.pdfUrl).length} resumes
-                </span>
-              </div>
-            </CardHeader>
-            
-            <CardContent className="p-6 overflow-y-auto max-h-[70vh]">
-              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'summaries' | 'resumes' | 'emails')}>
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="summaries">
-                    <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
-                      1
-                    </span>
-                    <span>Professional Summary</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="resumes">
-                    <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
-                      2
-                    </span>
-                    <span>Resumes</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="emails">
-                    <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
-                      3
-                    </span>
-                    <span>Emails</span>
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="summaries" className="mt-4">
-                  <div className="space-y-3">
-                    {selectedJobsList.map((job, index) => {
-                      const isExpanded = expandedJobs.has(job._id);
-                      const summaryState = summaries.get(job._id);
-                      const hasSummary = summaryState && summaryState.summary;
-                      
-                      return (
-                        <div
-                          key={job._id}
-                          className="rounded-lg border bg-white transition-all"
-                        >
-                          {/* Job Header */}
-                          <div className="flex items-start gap-3 p-4">
-                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-semibold flex-shrink-0">
-                              {index + 1}
-                            </div>
-                            <div className="flex items-start gap-3 flex-1 min-w-0">
-                              <CompanyLogo name={job.company} logoUrl={job.logoUrl} domain={job.companyDomain} size={36} />
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-semibold text-lg text-slate-900 truncate">
-                                  {job.title}
-                                </h4>
-                                <p className="text-sm text-slate-600 flex items-center gap-2 mt-1">
-                                  <Building2 className="h-4 w-4" />
-                                  {job.company}
-                                  <span className="text-slate-400">•</span>
-                                  <MapPin className="h-4 w-4" />
-                                  {job.location}
-                                </p>
-                                {hasSummary && !isExpanded && (
-                                  <div className="flex items-center gap-2 mt-2">
-                                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                    <span className="text-xs text-green-600 font-medium">
-                                      {summaryState.isEdited ? 'Summary edited' : 'Summary generated'}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleJobExpansion(job._id)}
-                              className="flex-shrink-0"
-                            >
-                              {isExpanded ? (
-                                <ChevronUp className="h-5 w-5" />
-                              ) : (
-                                <ChevronDown className="h-5 w-5" />
-                              )}
-                            </Button>
-                          </div>
-                          
-                          {/* Expanded Summary Section */}
-                          {isExpanded && (
-                            <div className="px-4 pb-4 space-y-3 border-t pt-4 bg-slate-50">
-                              <div className="flex items-center justify-between">
-                                <label className="text-sm font-semibold text-slate-700">
-                                  Professional Summary
-                                </label>
-                                <div className="flex items-center gap-2">
-                                  {hasSummary && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => handleGenerateSummary(job)}
-                                      disabled={summaryState?.isGenerating || isGeneratingAll}
-                                      className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                    >
-                                      <RefreshCw className={`h-4 w-4 mr-1 ${summaryState?.isGenerating ? 'animate-spin' : ''}`} />
-                                      Regenerate
-                                    </Button>
-                                  )}
-                                  {!hasSummary && (
-                                    <Button
-                                      size="sm"
-                                      onClick={() => handleGenerateSummary(job)}
-                                      disabled={summaryState?.isGenerating || isGeneratingAll}
-                                    >
-                                      {summaryState?.isGenerating ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                          Generating...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Sparkles className="h-4 w-4 mr-1" />
-                                          Generate Summary
-                                        </>
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <Textarea
-                                value={summaryState?.summary || ''}
-                                onChange={(e) => handleSummaryChange(job._id, e.target.value)}
-                                placeholder="Click 'Generate Summary' to create an AI-powered professional summary for this job..."
-                                className="min-h-[120px] resize-none"
-                                disabled={summaryState?.isGenerating || isGeneratingAll}
-                              />
-                              
-                              <div className="flex items-center justify-between text-xs text-slate-500">
-                                <span>
-                                  {summaryState?.summary?.length || 0} characters
-                                </span>
-                                {summaryState?.isEdited && (
-                                  <span className="text-blue-600 flex items-center gap-1">
-                                    <CheckCircle2 className="h-3 w-3" />
-                                    Manually edited
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="resumes" className="mt-4">
-                  <div className="space-y-3">
-                    {selectedJobsList.map((job, index) => {
-                      const summaryState = summaries.get(job._id);
-                      const hasSummary = summaryState && summaryState.summary;
-                      
-                      if (!hasSummary) {
-                        return (
-                          <div key={job._id} className="rounded-lg border bg-slate-50 p-4">
-                            <div className="flex items-center gap-3">
-                              <CompanyLogo name={job.company} logoUrl={job.logoUrl} domain={job.companyDomain} size={36} />
-                              <div className="flex-1">
-                                <h4 className="font-semibold text-slate-900">{job.title}</h4>
-                                <p className="text-sm text-slate-600">{job.company}</p>
-                              </div>
-                              <span className="text-sm text-slate-500">Generate summary first</span>
-                            </div>
-                          </div>
-                        );
-                      }
-                      
-                      return (
-                        <div key={job._id} className="rounded-lg border bg-white">
-                          <div className="p-4 border-b">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <CompanyLogo name={job.company} logoUrl={job.logoUrl} domain={job.companyDomain} size={36} />
-                                <div>
-                                  <h4 className="font-semibold text-slate-900">{job.title}</h4>
-                                  <p className="text-sm text-slate-600">{job.company}</p>
-                                </div>
-                              </div>
-                              <Button
-                                size="sm"
-                                onClick={() => handleGenerateResume(job)}
-                                disabled={resumes.get(job._id)?.isGenerating || isGeneratingAllResumes}
-                              >
-                                {resumes.get(job._id)?.isGenerating ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                    Generating Resume...
-                                  </>
-                                ) : resumes.get(job._id)?.pdfUrl ? (
-                                  <>
-                                    <RefreshCw className="h-4 w-4 mr-1" />
-                                    Regenerate Resume
-                                  </>
-                                ) : (
-                                  <>
-                                    <FileText className="h-4 w-4 mr-1" />
-                                    Generate Resume
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          {/* PDF Viewer */}
-                          {resumes.get(job._id)?.pdfDownloadUrl && (
-                            <div className="p-4 space-y-3">
-                              <div className="w-full h-[600px] border rounded-lg overflow-hidden bg-slate-100">
-                                <iframe
-                                  src={getProxyPdfUrl(resumes.get(job._id)!.pdfDownloadUrl)}
-                                  className="w-full h-full"
-                                  title={`Resume for ${job.title}`}
-                                />
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => window.open(getProxyPdfUrl(resumes.get(job._id)!.pdfDownloadUrl), '_blank')}
-                                  className="flex-1"
-                                >
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Download PDF
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => window.open(getProxyPdfUrl(resumes.get(job._id)!.pdfDownloadUrl), '_blank')}
-                                  className="flex-1"
-                                >
-                                  <ExternalLink className="h-4 w-4 mr-2" />
-                                  Open in New Tab
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Error Message */}
-                          {resumes.get(job._id)?.error && (
-                            <div className="p-4 border-t">
-                              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                                {resumes.get(job._id)!.error}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="emails" className="mt-4">
-                  {emailPreview.length === 0 && !isGeneratingEmails ? (
-                    <div className="text-center py-12">
-                      <Mail className="h-12 w-12 mx-auto mb-4 text-slate-400" />
-                      <p className="text-slate-600 mb-4">Generate personalized emails for your applications</p>
-                      <Button
-                        onClick={handleGenerateEmails}
-                        disabled={isGeneratingEmails || !canGenerateEmails}
-                        size="lg"
-                      >
-                        <Sparkles className="mr-2 h-5 w-5" />
-                        Generate Emails
-                      </Button>
-                    </div>
-                  ) : isGeneratingEmails ? (
-                    <div className="text-center py-12">
-                      <Loader2 className="h-12 w-12 mx-auto mb-4 text-blue-600 animate-spin" />
-                      <p className="text-slate-600 mb-2 font-medium">Generating personalized emails...</p>
-                      <p className="text-sm text-slate-500">This may take a moment. Please wait.</p>
-                    </div>
-                  ) : (
-                    <EmailListView
-                      emails={emailPreview}
-                      onUpdate={handleEmailUpdate}
-                      onRegenerate={handleEmailRegenerate}
-                      isGenerating={isGeneratingEmails}
-                      onRemove={(emailIndex, jobId) => handleRemoveEmailApplication(emailIndex, jobId)}
-                    />
-                  )}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-
-            <div className="border-t p-6 bg-slate-50 flex items-center justify-between">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowBulkModal(false);
-                  setEmailPreview([]);
-                  setEmailProgressId(null);
-                  setActiveTab('summaries');
-                }}
-                disabled={applying || isGeneratingEmails}
-                size="lg"
-              >
-                Cancel
-              </Button>
-
-              {activeTab === 'emails' && (
-                emailPreview.length > 0 ? (
-                  <Button
-                    onClick={handleFinalizeEmails}
-                    disabled={applying || isGeneratingEmails}
-                    size="lg"
-                    className="px-8"
-                  >
-                    {applying ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Sending Emails...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="mr-2 h-5 w-5" />
-                        Send All ({emailPreview.length})
-                      </>
-                    )}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleBulkApply}
-                    // IMPORTANT: Prevent applying until emails are generated.
-                    // The user must first generate email previews in the Emails tab,
-                    // then use the "Send All" button once emails exist.
-                    disabled={true}
-                    size="lg"
-                    className="px-8"
-                  >
-                    {applying ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Submitting Applications...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="mr-2 h-5 w-5" />
-                        Confirm & Apply to All
-                      </>
-                    )}
-                  </Button>
-                )
-              )}
-            </div>
-          </Card>
-        </div>
+      {/* Bottom Action Bar - Only show if jobs are selected AND modal is not open */}
+      {selectedJobs.size > 0 && !showProgressModal && !showBulkModal && (
+        <SelectedJobsActionBar
+          selectedCount={selectedJobs.size}
+          onApply={() => setShowBulkModal(true)}
+          onDismiss={clearSelection}
+        />
       )}
+{/* Bulk Apply Modal - new mobile-first bottom sheet */}
+<ApplyJobsModal
+  open={showBulkModal}
+  onOpenChange={(open) => {
+    if (!open) {
+      setShowBulkModal(false);
+      setEmailPreview([]);
+      setEmailProgressId(null);
+    }
+  }}
+  jobs={selectedJobsList.map(job => ({
+    id: job._id,
+    title: job.title,
+    company: job.company,
+    location: job.location,
+  }))}
+  summaryCount={validSummaryCount}
+  resumeCount={Array.from(resumes.values()).filter(r => r.pdfUrl).length}
+  jobStates={jobStates}
+  emailPreview={emailPreview}
+  isGeneratingEmails={isGeneratingEmails}
+  canGenerateEmails={canGenerateEmails}
+  onGenerateSummaries={handleGenerateAllSummaries}
+  onGenerateResumes={handleGenerateAllResumes}
+  onGenerateSummaryForJob={(jobId) => {
+    const job = jobs.find(j => j._id === jobId);
+    if (job) handleGenerateSummary(job);
+  }}
+  onGenerateResumeForJob={(jobId) => {
+    const job = jobs.find(j => j._id === jobId);
+    if (job) handleGenerateResume(job);
+  }}
+  onGenerateEmails={handleGenerateEmails}
+  onUpdateEmail={handleEmailUpdate}
+  onRegenerateEmail={handleEmailRegenerate}
+  onRemoveEmailApplication={handleRemoveEmailApplication}
+  onFinalizeEmails={handleFinalizeEmails}
+  applying={applying}
+/>
+
+
 
       {/* Application Progress Modal */}
       {showProgressModal && progressId && (

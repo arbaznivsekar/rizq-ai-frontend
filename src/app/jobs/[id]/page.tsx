@@ -200,7 +200,7 @@ export default function JobDetailsPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Header />
 
-      <div className="container mx-auto px-4 py-8 pb-24 max-w-5xl">
+      <div className="container mx-auto px-4 py-8 max-w-5xl">
         {/* Back Button - Context-aware navigation */}
         <Button variant="ghost" onClick={() => {
           // Navigate based on where user came from
