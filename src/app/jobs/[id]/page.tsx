@@ -8,10 +8,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Header } from '@/components/layout/Header';
 import { BulkApplyBar } from '@/components/jobs/BulkApplyBar';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 import { 
   Building2, MapPin, Calendar, Briefcase, 
   ArrowLeft, Loader2, LayoutDashboard, CheckCircle2, Clock
@@ -53,7 +54,6 @@ export default function JobDetailsPage() {
   } | null>(null);
   const scrollRestoreKey = `job_details_scroll_${params.id}`;
 
-  // Check if user came from dashboard or applications page
   const fromDashboard = searchParams.get('from') === 'dashboard';
   const fromApplications = searchParams.get('from') === 'applications';
 
@@ -62,7 +62,6 @@ export default function JobDetailsPage() {
     const handleScroll = () => {
       sessionStorage.setItem(scrollRestoreKey, window.scrollY.toString());
     };
-
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [scrollRestoreKey]);
@@ -72,14 +71,11 @@ export default function JobDetailsPage() {
     if (!loading && job) {
       const savedScrollPosition = sessionStorage.getItem(scrollRestoreKey);
       if (savedScrollPosition) {
-        // Use requestAnimationFrame to ensure DOM is fully rendered
         requestAnimationFrame(() => {
           window.scrollTo(0, parseInt(savedScrollPosition, 10));
-          // Clear the saved position after restoring
           sessionStorage.removeItem(scrollRestoreKey);
         });
       } else {
-        // Scroll to top on first load
         window.scrollTo(0, 0);
       }
     }
@@ -96,8 +92,6 @@ export default function JobDetailsPage() {
       const response = await getJob(jobId);
       if (response.success && response.data.job) {
         setJob(response.data.job);
-        
-        // Check application eligibility if user is authenticated
         if (isAuthenticated) {
           checkEligibility(jobId);
         }
@@ -121,9 +115,41 @@ export default function JobDetailsPage() {
       }
     } catch (error) {
       console.error('Failed to check eligibility:', error);
-      // Don't block the UI if eligibility check fails
     }
   };
+
+  // Back navigation helper
+  const handleBack = () => {
+    if (fromDashboard) {
+      router.push('/dashboard');
+    } else if (fromApplications) {
+      router.push('/applications');
+    } else {
+      const savedState = sessionStorage.getItem('paginationState');
+      if (savedState) {
+        try {
+          const paginationState = JSON.parse(savedState);
+          const urlParams = new URLSearchParams();
+          if (paginationState.query) urlParams.set('q', paginationState.query);
+          if (paginationState.location) urlParams.set('location', paginationState.location);
+          router.push(`/?${urlParams.toString()}`);
+        } catch (error) {
+          console.error('Failed to parse saved state:', error);
+          router.push('/');
+        }
+      } else {
+        router.push('/');
+      }
+    }
+  };
+
+  const backLabel = fromDashboard ? (
+    <><LayoutDashboard className="h-4 w-4 mr-2" />Back to Dashboard</>
+  ) : fromApplications ? (
+    <><Briefcase className="h-4 w-4 mr-2" />Back to Applications</>
+  ) : (
+    <><ArrowLeft className="h-4 w-4 mr-2" />Back to search</>
+  );
 
   if (loading) {
     return (
@@ -145,50 +171,7 @@ export default function JobDetailsPage() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <h2 className="text-2xl font-semibold text-slate-900 mb-2">Job not found</h2>
               <p className="text-slate-600 mb-6 font-bold">Please sign in first to view job details.</p>
-              <Button onClick={() => {
-                // Navigate based on where user came from
-                if (fromDashboard) {
-                  router.push('/dashboard');
-                } else if (fromApplications) {
-                  router.push('/applications');
-                } else {
-                  // Check if we have saved search state
-                  const savedState = sessionStorage.getItem('paginationState');
-                  if (savedState) {
-                    try {
-                      const paginationState = JSON.parse(savedState);
-                      // Navigate to search page with preserved search parameters
-                      const urlParams = new URLSearchParams();
-                      if (paginationState.query) urlParams.set('q', paginationState.query);
-                      if (paginationState.location) urlParams.set('location', paginationState.location);
-                      router.push(`/?${urlParams.toString()}`);
-                    } catch (error) {
-                      console.error('Failed to parse saved state:', error);
-                      router.push('/');
-                    }
-                  } else {
-                    // Fallback to home page if no saved state
-                    router.push('/');
-                  }
-                }
-              }}>
-                {fromDashboard ? (
-                  <>
-                    <LayoutDashboard className="h-4 w-4 mr-2" />
-                    Back to Dashboard
-                  </>
-                ) : fromApplications ? (
-                  <>
-                    <Briefcase className="h-4 w-4 mr-2" />
-                    Back to Applications
-                  </>
-                ) : (
-                  <>
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to search
-                  </>
-                )}
-              </Button>
+              <Button onClick={handleBack}>{backLabel}</Button>
             </CardContent>
           </Card>
         </div>
@@ -200,163 +183,151 @@ export default function JobDetailsPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Header />
 
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
-        {/* Back Button - Context-aware navigation */}
-        <Button variant="ghost" onClick={() => {
-          // Navigate based on where user came from
-          if (fromDashboard) {
-            router.push('/dashboard');
-          } else if (fromApplications) {
-            router.push('/applications');
-          } else {
-            // Check if we have saved search state
-            const savedState = sessionStorage.getItem('paginationState');
-            if (savedState) {
-              try {
-                const paginationState = JSON.parse(savedState);
-                // Navigate to search page with preserved search parameters
-                const urlParams = new URLSearchParams();
-                if (paginationState.query) urlParams.set('q', paginationState.query);
-                if (paginationState.location) urlParams.set('location', paginationState.location);
-                router.push(`/?${urlParams.toString()}`);
-              } catch (error) {
-                console.error('Failed to parse saved state:', error);
-                router.push('/');
-              }
-            } else {
-              // Fallback to home page if no saved state
-              router.push('/');
-            }
-          }
-        }} className="mb-4">
-          {fromDashboard ? (
-            <>
-              <LayoutDashboard className="h-4 w-4 mr-2" />
-              Back to Dashboard
-            </>
-          ) : fromApplications ? (
-            <>
-              <Briefcase className="h-4 w-4 mr-2" />
-              Back to Applications
-            </>
-          ) : (
-            <>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to search
-            </>
-          )}
+      <div className="container mx-auto px-4 py-6 pb-28 max-w-5xl">
+
+        {/* Back Button */}
+        <Button variant="ghost" onClick={handleBack} className="mb-4">
+          {backLabel}
         </Button>
 
         {/* Application Status Alert */}
-        {applicationStatus && applicationStatus.hasApplied && (
+        {applicationStatus?.hasApplied && (
           <Alert className={`mb-4 ${applicationStatus.canReapply ? 'border-green-200 bg-green-50' : 'border-blue-200 bg-blue-50'}`}>
             <CheckCircle2 className={`h-4 w-4 ${applicationStatus.canReapply ? 'text-green-600' : 'text-blue-600'}`} />
             <AlertDescription className={applicationStatus.canReapply ? 'text-green-800' : 'text-blue-800'}>
               {applicationStatus.canReapply ? (
-                <span className="font-medium">
-                  You previously applied to this job. You can apply again now.
-                </span>
+                <span className="font-medium">You previously applied to this job. You can apply again now.</span>
               ) : (
                 <span className="font-medium">
                   <Clock className="inline h-4 w-4 mr-1" />
-                  You applied to this job. You can reapply in <strong>{applicationStatus.daysUntilReapply} day{applicationStatus.daysUntilReapply !== 1 ? 's' : ''}</strong>.
+                  You applied to this job. You can reapply in{' '}
+                  <strong>{applicationStatus.daysUntilReapply} day{applicationStatus.daysUntilReapply !== 1 ? 's' : ''}</strong>.
                 </span>
               )}
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Job Header Card */}
+        {/* ✅ FIXED: Job Header Card — mobile responsive */}
         <Card className={`mb-6 transition-all ${selectedJobs.has(job._id) ? 'ring-2 ring-blue-500 bg-blue-50/30' : ''}`}>
-          <CardHeader>
-            <div className="flex gap-4">
-              {/* Selection Checkbox */}
-              <div className="flex items-start pt-2">
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col gap-4">
+
+              {/* Row 1 — Checkbox + Logo + Company */}
+              <div className="flex items-center gap-3">
                 <Checkbox
                   checked={selectedJobs.has(job._id)}
                   onCheckedChange={() => toggleJobSelection(job._id)}
-                  className="h-6 w-6"
+                  className="h-5 w-5 flex-shrink-0"
                   disabled={applicationStatus?.hasApplied && !applicationStatus?.canReapply}
                 />
-              </div>
-
-              {/* Job Info */}
-              <div className="flex-1 flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-                <div className="flex-1">
-                  <div className="flex flex-col gap-3 mb-3">
-                    {/* Company Logo and Name on same line */}
-                    <div className="flex items-center gap-3">
-                      <CompanyLogo
-                        name={job.company}
-                        logoUrl={job.logoUrl}
-                        domain={job.companyDomain || job.url}
-                        size={56}
-                      />
-                      <div className="flex items-center gap-2 text-base text-slate-700">
-                        <Building2 className="h-5 w-5" />
-                        <span className="font-semibold text-xl">{job.company}</span>
-                      </div>
-                    </div>
-                    {/* Job Title below */}
-                    <CardTitle className="text-3xl">{job.title}</CardTitle>
-                  </div>
+                <CompanyLogo
+                  name={job.company}
+                  logoUrl={job.logoUrl}
+                  domain={job.companyDomain || job.url}
+                  size={40}
+                />
+                <div className="flex items-center gap-2 min-w-0">
+                  <Building2 className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  <span className="font-semibold text-base truncate">{job.company}</span>
                 </div>
-                <CardDescription className="flex flex-col gap-2 text-base">
-                  <span className="flex items-center gap-2">
-                    <MapPin className="h-5 w-5" />
-                    {job.location}
-                  </span>
-                  {job.jobType && (
-                    <span className="flex items-center gap-2">
-                      <Briefcase className="h-5 w-5" />
-                      {job.jobType}
-                    </span>
-                  )}
-                  {job.postedAt && (
-                    <span className="flex items-center gap-2">
-                      <Calendar className="h-5 w-5" />
-                      Posted {new Date(job.postedAt).toLocaleDateString()}
-                    </span>
-                  )}
-                </CardDescription>
               </div>
 
-              {job.salaryMin && job.salaryMax && (
-                <div className="flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-xl border border-emerald-200">
-                  <div className="flex items-center justify-center w-10 h-10 bg-emerald-100 rounded-full">
-                    <span className="text-emerald-600 font-bold text-lg">₹</span>
+              {/* Row 2 — Job Title */}
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug">
+                {job.title}
+              </h1>
+
+              <Separator />
+
+              {/* Row 3 — Meta info */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <span className="leading-snug">{job.location}</span>
+                </div>
+                {job.jobType && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Briefcase className="h-4 w-4 flex-shrink-0" />
+                    <span>{job.jobType}</span>
                   </div>
+                )}
+                {job.postedAt && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="h-4 w-4 flex-shrink-0" />
+                    <span>Posted {new Date(job.postedAt).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 4 — Salary inline, NO overflow */}
+              {job.salaryMin && job.salaryMax && (
+                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5 w-fit">
+                  <span className="text-emerald-600 font-bold text-base flex-shrink-0">₹</span>
                   <div>
-                    <p className="text-2xl font-bold text-emerald-700">
-                      {(job.salaryMin / 100000).toFixed(1)} - {(job.salaryMax / 100000).toFixed(1)} LPA
+                    <p className="text-base font-bold text-emerald-700">
+                      {(job.salaryMin / 100000).toFixed(1)} – {(job.salaryMax / 100000).toFixed(1)} LPA
                     </p>
-                    <p className="text-sm text-emerald-600 font-medium">Annual Compensation</p>
+                    <p className="text-xs text-emerald-600">Annual Compensation</p>
                   </div>
                 </div>
               )}
-            </div>
-          </CardHeader>
-        </Card>
 
-        {/* Job Description */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Job Description</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">
-              {job.description || 'No description available'}
-            </p>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Requirements / Skills */}
+        {/* ✅ FIXED: Job Description — parsed sections, readable */}
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base sm:text-lg">Job Description</CardTitle>
+          </CardHeader>
+          <Separator />
+          <CardContent className="pt-4">
+            <div className="space-y-3">
+              {(job.description || 'No description available')
+                .split(/\n{2,}/)
+                .filter(Boolean)
+                .map((section, i) => {
+                  const lines = section.split('\n').filter(Boolean);
+                  const firstLine = lines[0] || '';
+                  const isHeading =
+                    firstLine.length < 60 &&
+                    (firstLine.endsWith(':') || firstLine === firstLine.toUpperCase());
+
+                  if (isHeading) {
+                    return (
+                      <div key={i} className="space-y-1 pt-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          {firstLine.replace(':', '')}
+                        </p>
+                        {lines.slice(1).length > 0 && (
+                          <p className="text-sm text-foreground leading-relaxed">
+                            {lines.slice(1).join(' ')}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <p key={i} className="text-sm text-foreground leading-relaxed">
+                      {section}
+                    </p>
+                  );
+                })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Required Skills */}
         {job.requirements && job.requirements.length > 0 && (
           <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Required Skills</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base sm:text-lg">Required Skills</CardTitle>
             </CardHeader>
-            <CardContent>
+            <Separator />
+            <CardContent className="pt-4">
               <div className="flex flex-wrap gap-2">
                 {job.requirements.map((skill, idx) => (
                   <Badge key={idx} variant="secondary" className="text-sm px-3 py-1">
@@ -367,12 +338,11 @@ export default function JobDetailsPage() {
             </CardContent>
           </Card>
         )}
+
       </div>
 
-      {/* Bulk Apply Bar Component */}
+      {/* Bulk Apply Bar */}
       <BulkApplyBar jobs={job ? [job] : []} />
     </div>
   );
 }
-
-

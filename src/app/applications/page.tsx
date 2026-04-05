@@ -3,17 +3,37 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { getApplications } from '@/lib/api';
+
 import { Header } from '@/components/layout/Header';
+import { CompanyLogo } from '@/components/common/CompanyLogo';
+
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Briefcase, MapPin, Building2, Calendar, Loader2,
-  CheckCircle, Clock, XCircle, FileText, LayoutDashboard
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+
+import {
+  Briefcase,
+  Calendar,
+  Loader2,
+  CheckCircle,
+  Clock,
+  XCircle,
+  FileText,
+  LayoutDashboard,
+  RefreshCw,
+  MapPin
 } from 'lucide-react';
+
+/* ============================================================
+   Types
+============================================================ */
 
 interface Application {
   _id: string;
@@ -22,9 +42,6 @@ interface Application {
     title: string;
     company: string;
     location: string;
-     salaryMin?: number;
-    salaryMax?: number;
-    url?: string;
     companyDomain?: string;
     logoUrl?: string;
   };
@@ -33,367 +50,446 @@ interface Application {
   updatedAt: string;
 }
 
+/* ============================================================
+   Navbar
+============================================================ */
+
+function ApplicationsNavbar({
+  loading,
+  onRefresh
+}: {
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between"
+    >
+      <div>
+        <h1 className="text-2xl md:text-4xl font-bold tracking-tight">
+          My Applications
+        </h1>
+        <p className="text-muted-foreground text-sm md:text-base">
+          Track and manage your job applications
+        </p>
+      </div>
+
+      <Button variant="outline" onClick={onRefresh}>
+        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+        Refresh
+      </Button>
+    </motion.div>
+  );
+}
+
+/* ============================================================
+   Stats
+============================================================ */
+
+function ApplicationStats({ applications }: { applications: Application[] }) {
+
+  const total = applications.length;
+  const pending = applications.filter(
+    a => a.status === 'Applied' || a.status === 'Interview'
+  ).length;
+
+  const accepted = applications.filter(
+    a => a.status === 'Offer'
+  ).length;
+
+  const rejected = applications.filter(
+    a => a.status === 'Rejected'
+  ).length;
+
+  const stats = [
+    {
+      title: 'Total',
+      value: total,
+      subtitle: 'All time',
+      icon: Briefcase ,
+      bg: 'bg-gray-100 text-gray-700 border border-grey-200',
+      border: 'border-gray-200'
+    },
+    {
+      title: 'Pending',
+      value: pending,
+      subtitle: 'Awaiting reply',
+      icon: Clock,
+      bg: 'bg-yellow-100 text-yellow-700 border border-yellow-200',
+      border: 'border-yellow-200'
+    },
+    {
+      title: 'Accepted',
+      value: accepted,
+      subtitle: 'Successful',
+      icon: CheckCircle ,
+      bg: 'bg-green-100 text-green-700 border border-green-200',
+      border: 'border-green-200'
+    },
+    {
+      title: 'Rejected',
+      value: rejected,
+      subtitle: 'Keep going!',
+      icon: XCircle,
+      bg: 'bg-red-100',
+      border: 'border-red-200 text-red-700 border border-red-200'
+    }
+  ];
+
+  return (
+    <div className="mb-8">
+
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold">
+          Application Stats
+        </h2>
+
+        <p className="text-sm text-muted-foreground">
+          Your complete job search overview
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+        {stats.map((stat, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05 }}
+          >
+            <Card
+              className={`${stat.bg} ${stat.border} border rounded-2xl shadow-sm hover:shadow-md transition-all`}
+            >
+              <CardContent className="p-5">
+
+                <div className="flex items-start justify-between">
+
+                  <div>
+
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">
+                      {stat.title}
+                    </p>
+
+                    <p className="text-3xl font-bold mt-2">
+                      {stat.value}
+                    </p>
+
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {stat.subtitle}
+                    </p>
+
+                  </div>
+
+                  <stat.icon className="h-5 w-5 text-muted-foreground" />
+
+                </div>
+
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Recent Applications
+============================================================ */
+
+function RecentApplications({ applications }: { applications: Application[] }) {
+
+  const recent = [...applications]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 6);
+
+  if (recent.length === 0) {
+    return (
+      <div className="text-center py-10">
+        <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+        <p className="text-muted-foreground">No recent applications</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {recent.map((app) => (
+        <motion.div
+          key={app._id}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card className="border bg-white/60 backdrop-blur-md shadow-sm hover:shadow-md transition-all">
+            <CardContent className="p-4">
+
+              <Badge className="mb-2">{app.status}</Badge>
+
+              <div className="flex gap-3">
+                <CompanyLogo
+                  name={app.jobId.company}
+                  logoUrl={app.jobId.logoUrl}
+                  domain={app.jobId.companyDomain}
+                  size={32}
+                />
+
+                <div>
+                  <Link
+                    href={`/jobs/${app.jobId._id}`}
+                    className="font-semibold block hover:text-blue-600"
+                  >
+                    {app.jobId.title}
+                  </Link>
+
+                  <p className="text-sm text-muted-foreground">
+                    {app.jobId.company}
+                  </p>
+                </div>
+              </div>
+
+            </CardContent>
+          </Card>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+/* ============================================================
+   Page
+============================================================ */
+
 export default function ApplicationsPage() {
+
   const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useAuth();
+
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<string>('all');
-  const scrollRestoreKey = 'applications_scroll_position';
-
-  // Scroll restoration: Save scroll position
-  useEffect(() => {
-    const handleScroll = () => {
-      sessionStorage.setItem(scrollRestoreKey, window.scrollY.toString());
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Scroll restoration: Restore scroll position on mount
-  useEffect(() => {
-    if (!authLoading && isAuthenticated && !loading) {
-      const savedScrollPosition = sessionStorage.getItem(scrollRestoreKey);
-      if (savedScrollPosition) {
-        // Use requestAnimationFrame to ensure DOM is fully rendered
-        requestAnimationFrame(() => {
-          window.scrollTo(0, parseInt(savedScrollPosition, 10));
-          // Clear the saved position after restoring
-          sessionStorage.removeItem(scrollRestoreKey);
-        });
-      } else {
-        // Scroll to top on first load
-        window.scrollTo(0, 0);
-      }
-    }
-  }, [authLoading, isAuthenticated, loading]);
+  const [filter, setFilter] = useState<'all' | 'pending' | 'rejected' | 'recent'>('all');
 
   useEffect(() => {
     if (!authLoading) {
       if (!isAuthenticated) {
         router.push('/auth/login');
       } else {
-        // Fetch immediately when authenticated
-        setLoading(true);
         fetchApplications();
       }
     }
-  }, [isAuthenticated, authLoading, router]);
+  }, [authLoading, isAuthenticated]);
 
   const fetchApplications = async () => {
+    setLoading(true);
     try {
       const response = await getApplications();
-      if (response.success && response.data) {
-        // Filter out applications where jobId is null (job was deleted)
-        const validApplications = (response.data || []).filter((app: Application) => 
-          app.jobId && (app.jobId._id || app.jobId)
-        );
-        setApplications(validApplications);
-      } else if (response.items) {
-        // Handle both response formats
-        const validApplications = (response.items || []).filter((app: Application) => 
-          app.jobId && (app.jobId._id || app.jobId)
-        );
-        setApplications(validApplications);
-      }
-    } catch (error) {
-      console.error('Failed to fetch applications:', error);
+      if (response.success && response.data) setApplications(response.data);
+      if (response.items) setApplications(response.items);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Map backend status to frontend display status
-  const mapStatus = (status: string): string => {
-    const statusMap: { [key: string]: string } = {
-      'Applied': 'pending',
-      'Interview': 'pending',
-      'Offer': 'accepted',
-      'Rejected': 'rejected',
-    };
-    return statusMap[status] || status.toLowerCase();
-  };
-
-  const getStatusIcon = (status: string) => {
-    const displayStatus = mapStatus(status);
-    switch (displayStatus) {
-      case 'pending':
-        return <Clock className="h-4 w-4 text-orange-600" />;
-      case 'accepted':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'rejected':
-        return <XCircle className="h-4 w-4 text-red-600" />;
-      default:
-        return <Clock className="h-4 w-4" />;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    const displayStatus = mapStatus(status);
-    const variants: { [key: string]: 'default' | 'secondary' | 'destructive' | 'outline' } = {
-      pending: 'secondary',
-      accepted: 'default',
-      rejected: 'destructive',
-    };
-    return (
-      <Badge variant={variants[displayStatus] || 'secondary'} className="capitalize">
-        {status}
-      </Badge>
-    );
-  };
-
-  const filteredApplications = applications.filter((app) => {
+  const filteredApplications = applications.filter(app => {
     if (filter === 'all') return true;
-    const displayStatus = mapStatus(app.status);
-    return displayStatus === filter;
+    if (filter === 'recent') return true;
+    if (filter === 'pending') return app.status === 'Applied' || app.status === 'Interview';
+    if (filter === 'rejected') return app.status === 'Rejected';
+    return true;
   });
 
-  // Only show full loading during initial auth check
-  // Allow progressive loading for data
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <Header />
-        <div className="container mx-auto px-4 py-16 flex justify-center">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 pb-24 md:pb-8">
+
       <Header />
 
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Back to Dashboard Button */}
-        <Button 
-          variant="ghost" 
-          onClick={() => router.push('/dashboard')} 
-          className="mb-6"
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="max-w-7xl mx-auto px-4 py-6 md:py-8"
+      >
+
+        <Button
+          variant="ghost"
+          onClick={() => router.push('/dashboard')}
+          className="mb-4"
         >
           <LayoutDashboard className="h-4 w-4 mr-2" />
           Back to Dashboard
         </Button>
 
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">My Applications</h1>
-          <p className="text-slate-600">
-            Track and manage all your job applications in one place
-          </p>
-        </div>
+        <ApplicationsNavbar
+          loading={loading}
+          onRefresh={fetchApplications}
+        />
 
-        {/* Stats Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Briefcase className="h-8 w-8 text-blue-600" />
-                <div>
-                  {loading ? (
-                    <div className="h-8 w-12 bg-slate-200 animate-pulse rounded" />
-                  ) : (
-                    <p className="text-2xl font-bold">{applications.length}</p>
-                  )}
-                  <p className="text-sm text-slate-600">Total</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <ApplicationStats applications={applications} />
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Clock className="h-8 w-8 text-orange-600" />
-                <div>
-                  {loading ? (
-                    <div className="h-8 w-12 bg-slate-200 animate-pulse rounded" />
-                  ) : (
-                    <p className="text-2xl font-bold text-orange-600">
-                      {applications.filter((a) => a.status === 'Applied' || a.status === 'Interview').length}
-                    </p>
-                  )}
-                  <p className="text-sm text-slate-600">Pending</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <Separator className="mb-6" />
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="h-8 w-8 text-green-600" />
-                <div>
-                  {loading ? (
-                    <div className="h-8 w-12 bg-slate-200 animate-pulse rounded" />
-                  ) : (
-                    <p className="text-2xl font-bold text-green-600">
-                      {applications.filter((a) => a.status === 'Offer').length}
-                    </p>
-                  )}
-                  <p className="text-sm text-slate-600">Accepted</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <Tabs value={filter} onValueChange={(v: any) => setFilter(v)}>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <XCircle className="h-8 w-8 text-red-600" />
-                <div>
-                  {loading ? (
-                    <div className="h-8 w-12 bg-slate-200 animate-pulse rounded" />
-                  ) : (
-                    <p className="text-2xl font-bold text-red-600">
-                      {applications.filter((a) => a.status === 'Rejected').length}
-                    </p>
-                  )}
-                  <p className="text-sm text-slate-600">Rejected</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+          <TabsList className="grid grid-cols-4 w-full mb-6 bg-white/60 backdrop-blur-md border rounded-xl p-1">
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="pending">Pending</TabsTrigger>
+            <TabsTrigger value="rejected">Rejected</TabsTrigger>
+            <TabsTrigger value="recent">Recent</TabsTrigger>
+          </TabsList>
 
-        {/* Applications List */}
-        <Card>
-          <CardHeader>
-            <CardTitle>All Applications</CardTitle>
-            <CardDescription>
-              Filter and view your application history
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="all" onValueChange={setFilter}>
-              <TabsList className="mb-6">
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="pending">Pending ({applications.filter((a) => a.status === 'Applied' || a.status === 'Interview').length})</TabsTrigger>
-                <TabsTrigger value="accepted">Accepted ({applications.filter((a) => a.status === 'Offer').length})</TabsTrigger>
-                <TabsTrigger value="rejected">Rejected ({applications.filter((a) => a.status === 'Rejected').length})</TabsTrigger>
-              </TabsList>
+          <TabsContent value={filter}>
 
-              <TabsContent value={filter}>
+            <Card className="border bg-white/60 backdrop-blur-md shadow-sm">
+
+              <CardHeader>
+                <CardTitle>Applications</CardTitle>
+                <CardDescription>
+                  View and manage your job applications
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent>
+
                 {loading ? (
-                  <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="border rounded-lg p-4 animate-pulse">
-                        <div className="flex justify-between items-start gap-4">
-                          <div className="flex-1 space-y-3">
-                            <div className="h-6 bg-slate-200 rounded w-3/4" />
-                            <div className="h-4 bg-slate-200 rounded w-1/2" />
-                            <div className="h-4 bg-slate-200 rounded w-2/3" />
-                          </div>
-                          <div className="flex gap-3">
-                            <div className="h-6 w-20 bg-slate-200 rounded" />
-                            <div className="h-9 w-24 bg-slate-200 rounded" />
-                          </div>
-                        </div>
-                      </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {Array(8).fill(0).map((_, i) => (
+                      <Skeleton key={i} className="h-40 w-full" />
                     ))}
                   </div>
+
                 ) : filteredApplications.length === 0 ? (
-                  <div className="text-center py-12">
-                    <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-slate-700 mb-2">
-                      No applications yet
+
+                  <div className="text-center py-16">
+
+                    <FileText className="h-14 w-14 mx-auto mb-4 text-muted-foreground" />
+
+                    <h3 className="text-lg font-semibold mb-2">
+                      No applications found
                     </h3>
-                    <p className="text-slate-600 mb-6">
-                      Start applying to jobs and track your progress here
-                    </p>
-                    <Button asChild>
-                      <Link href="/">Browse Jobs</Link>
+
+                    <Button asChild className="bg-black hover:bg-neutral-800 mt-4">
+                      <Link href="/jobs">
+                        <Briefcase className="h-4 w-4 mr-2" />
+                        Browse Jobs
+                      </Link>
                     </Button>
+
                   </div>
+
                 ) : (
-                  <div className="space-y-4">
-                    {filteredApplications.map((application) => (
-                      <div
-                        key={application._id}
-                        className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+
+                    {filteredApplications.map((app) => (
+
+                      <motion.div
+                        key={app._id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
                       >
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-start gap-3 mb-2">
-                              {getStatusIcon(application.status)}
-                              <div>
-                                <Link
-                                  href={`/jobs/${application.jobId?._id || application.jobId}?from=applications`}
-                                  className="font-semibold text-lg hover:text-blue-600 transition-colors"
-                                >
-                                  {application.jobId?.title || 'Job Title'}
-                                </Link>
-                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1 text-sm text-slate-600">
-                                  <span className="flex items-center gap-1">
-                                    <Building2 className="h-4 w-4" />
-                                    {application.jobId?.company || 'Company'}
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <MapPin className="h-4 w-4" />
-                                    {application.jobId?.location || 'Location'}
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <Calendar className="h-4 w-4" />
-                                    Applied {new Date(application.createdAt).toLocaleDateString()}
-                                  </span>
-                                </div>
-                              </div>
+                        <Card className="p-4 border bg-white/60 backdrop-blur-md shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
+
+                          <Badge className="mb-3">
+                            {app.status}
+                          </Badge>
+
+                          <div className="flex gap-3 mb-3">
+
+                            <CompanyLogo
+                              name={app.jobId.company}
+                              logoUrl={app.jobId.logoUrl}
+                              domain={app.jobId.companyDomain}
+                              size={36}
+                            />
+
+                            <div>
+                              <Link
+                                href={`/jobs/${app.jobId._id}`}
+                                className="font-semibold block hover:text-blue-600"
+                              >
+                                {app.jobId.title}
+                              </Link>
+
+                              <p className="text-sm text-muted-foreground">
+                                {app.jobId.company}
+                              </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            {getStatusBadge(application.status)}
-                            {application.jobId && (application.jobId._id || application.jobId) ? (
-                              <Button asChild variant="outline" size="sm">
-                                <Link href={`/jobs/${application.jobId._id || application.jobId}?from=applications`}>
-                                  View Job
-                                </Link>
-                              </Button>
-                            ) : (
-                              <Badge variant="secondary" className="text-xs">
-                                Job Deleted
-                              </Badge>
-                            )}
+
+                          <div className="text-xs text-muted-foreground flex items-center gap-2">
+                            <MapPin className="h-3 w-3" />
+                            {app.jobId.location}
+
+                            <Calendar className="h-3 w-3 ml-2" />
+                            {new Date(app.createdAt).toLocaleDateString()}
                           </div>
-                        </div>
-                      </div>
+
+                        </Card>
+                      </motion.div>
                     ))}
+
                   </div>
                 )}
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+
+              </CardContent>
+            </Card>
+
+          </TabsContent>
+
+          <TabsContent value="recent">
+
+            <Card className="border bg-white/60 backdrop-blur-md shadow-sm">
+
+              <CardHeader>
+                <CardTitle>Recent Applications</CardTitle>
+                <CardDescription>
+                  Your latest applied jobs
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent>
+                <RecentApplications applications={applications} />
+              </CardContent>
+
+            </Card>
+
+          </TabsContent>
+
+        </Tabs>
+
+      </motion.div>
+
+      {/* Mobile CTA */}
+
+      <div className="fixed bottom-4 left-4 right-4 md:hidden">
+
+        <Button
+          asChild
+          className="w-full bg-black text-white hover:bg-neutral-800 h-14 text-lg shadow-lg"
+        >
+          <Link href="/jobs">
+            <Briefcase className="h-5 w-5 mr-2" />
+            Browse Jobs
+          </Link>
+        </Button>
+
       </div>
+
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
