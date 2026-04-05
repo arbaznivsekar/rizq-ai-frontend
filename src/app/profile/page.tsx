@@ -905,12 +905,12 @@ export default function ProfilePage() {
                         ))}
                         <div className="space-y-1">
                           <Label className="text-xs">Start Date</Label>
-                          <Input type="month" value={exp.startDate} className="h-8 text-sm"
+                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={exp.startDate} className="h-8 text-sm"
                             onChange={e => { const n = [...profile.experience]; n[i].startDate = e.target.value; setProfile({ ...profile, experience: n }); }} />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">End Date</Label>
-                          <Input type="month" value={exp.endDate} disabled={exp.current} className="h-8 text-sm"
+                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={exp.endDate} disabled={exp.current} className="h-8 text-sm"
                             onChange={e => { const n = [...profile.experience]; n[i].endDate = e.target.value; setProfile({ ...profile, experience: n }); }} />
                         </div>
                         <div className="flex items-center gap-2">
@@ -963,12 +963,12 @@ export default function ProfilePage() {
                         ))}
                         <div className="space-y-1">
                           <Label className="text-xs">Start Date</Label>
-                          <Input type="month" value={edu.startDate} className="h-8 text-sm"
+                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={edu.startDate} className="h-8 text-sm"
                             onChange={e => { const n = [...profile.education]; n[i].startDate = e.target.value; setProfile({ ...profile, education: n }); }} />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">End Date</Label>
-                          <Input type="month" value={edu.endDate} disabled={edu.current} className="h-8 text-sm"
+                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={edu.endDate} disabled={edu.current} className="h-8 text-sm"
                             onChange={e => { const n = [...profile.education]; n[i].endDate = e.target.value; setProfile({ ...profile, education: n }); }} />
                         </div>
                         <div className="flex items-center gap-2">
@@ -1017,12 +1017,12 @@ export default function ProfilePage() {
                         ))}
                         <div className="space-y-1">
                           <Label className="text-xs">Start Date</Label>
-                          <Input type="month" value={project.startDate} className="h-8 text-sm"
-                            onChange={e => { const n = [...profile.projects]; n[i].startDate = e.target.value; setProfile({ ...profile, projects: n }); }} />
+                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={project.startDate} className="h-8 text-sm"
+                             onChange={e => { const n = [...profile.projects]; n[i].startDate = e.target.value; setProfile({ ...profile, projects: n }); }} />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">End Date</Label>
-                          <Input type="month" value={project.endDate} disabled={project.current} className="h-8 text-sm"
+                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={project.endDate} disabled={project.current} className="h-8 text-sm"
                             onChange={e => { const n = [...profile.projects]; n[i].endDate = e.target.value; setProfile({ ...profile, projects: n }); }} />
                         </div>
                         <div className="flex items-center gap-2 sm:col-span-2">
