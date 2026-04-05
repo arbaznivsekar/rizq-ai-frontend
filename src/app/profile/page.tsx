@@ -14,13 +14,19 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { 
-  User, Mail, Phone, MapPin, Briefcase, GraduationCap, 
+import {
+  User, Mail, Phone, MapPin, Briefcase, GraduationCap,
   Link2, Github, Linkedin, Globe, Save, Loader2, Plus, X,
-  Settings, Award, Edit2, Check, Calendar, Building2, ArrowLeft
+  Settings, Award, Edit2, Check, Calendar, Building2, ArrowLeft,
+  MoreHorizontal, Share2, Download, ExternalLink, ChevronRight,
 } from 'lucide-react';
 import { MarkdownEditor } from '@/components/ui/markdown-editor';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ProfileData {
   _id?: string;
@@ -64,11 +70,7 @@ interface ProfileData {
     jobTypes: string[];
     locations: string[];
     remotePreference: string;
-    salaryExpectation: {
-      min: number;
-      max: number;
-      currency: string;
-    };
+    salaryExpectation: { min: number; max: number; currency: string };
     availability: string;
   };
   social: {
@@ -79,166 +81,590 @@ interface ProfileData {
   };
 }
 
+const emptyProfile: ProfileData = {
+  name: '', email: '', phone: '', location: '', bio: '', headline: '',
+  skills: [], experience: [], education: [], projects: [],
+  preferences: {
+    jobTypes: [], locations: [], remotePreference: 'any',
+    salaryExpectation: { min: 0, max: 0, currency: 'USD' },
+    availability: '',
+  },
+  social: { linkedin: '', github: '', portfolio: '', twitter: '' },
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDate(dateString: string): string {
+  if (!dateString?.trim()) return 'Present';
+  let d: Date;
+  if (/^\d{4}-\d{2}$/.test(dateString)) d = new Date(dateString + '-01');
+  else d = new Date(dateString);
+  if (isNaN(d.getTime())) return 'Invalid Date';
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+// ─── Sub‑components (Profile Card View) ───────────────────────────────────────
+
+/** Instagram‑style hero header */
+function ProfileHero({
+  profile,
+  user,
+  onEdit,
+}: {
+  profile: ProfileData;
+  user: { name?: string } | null;
+  onEdit: () => void;
+}) {
+  const initials = (profile.name || user?.name || 'U').charAt(0).toUpperCase();
+  const hasVerified = !!profile.headline;
+
+  return (
+    // 🎨 Gradient band — tweak `from-violet-600 to-indigo-500` here for brand colour
+    <div className="relative w-full">
+      <div className="h-28 w-full bg-gradient-to-r from-violet-600 via-indigo-500 to-blue-500 rounded-t-2xl" />
+
+      <Card className="mx-4 -mt-12 rounded-2xl shadow-xl border-0 overflow-visible">
+        <CardContent className="pt-0 pb-5 px-4">
+
+          {/* Avatar row */}
+          <div className="flex items-end justify-between -mt-10 mb-3">
+            <div className="relative">
+              {/* 🎨 Avatar gradient — change from-violet-500 to-purple-600 to your taste */}
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold border-4 border-background shadow-lg">
+                {initials}
+              </div>
+              {hasVerified && (
+                <div className="absolute -bottom-1 -right-1 bg-green-500 w-6 h-6 rounded-full border-2 border-background flex items-center justify-center">
+                  <Check className="h-3 w-3 text-white" />
+                </div>
+              )}
+            </div>
+
+            {/* Edit button — LinkedIn style */}
+            <Button size="sm" variant="outline" onClick={onEdit} className="rounded-full gap-1.5 h-8 px-3">
+              <Edit2 className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+          </div>
+
+          {/* Name + headline */}
+          <h1 className="text-xl font-bold text-foreground leading-tight">
+            {profile.name || 'Your Name'}
+          </h1>
+          {profile.headline && (
+            // 🎨 Headline colour: text-violet-600 → change to your brand accent
+            <p className="text-sm text-violet-600 font-medium mt-0.5 leading-snug">
+              {profile.headline}
+            </p>
+          )}
+
+          {/* Meta row */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+            {profile.location && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3" />{profile.location}
+              </span>
+            )}
+            {profile.phone && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Phone className="h-3 w-3" />{profile.phone}
+              </span>
+            )}
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Mail className="h-3 w-3" />{profile.email}
+            </span>
+          </div>
+
+          {profile.bio && (
+            <p className="mt-3 text-sm text-foreground leading-relaxed line-clamp-3">
+              {profile.bio}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/** Instagram‑style stats row */
+function ProfileStats({ profile }: { profile: ProfileData }) {
+  const stats = [
+    { value: profile.experience.length, label: 'Roles' },
+    { value: profile.skills.length, label: 'Skills' },
+    { value: profile.projects.length, label: 'Projects' },
+    { value: profile.education.length, label: 'Education' },
+  ];
+
+  return (
+    // 🎨 Stats bar background: bg-muted/50 → adjust for contrast
+    <div className="mx-4 mt-3">
+      <Card className="rounded-2xl border-0 shadow-sm bg-muted/50">
+        <CardContent className="py-3 px-2">
+          <div className="grid grid-cols-4 divide-x divide-border">
+            {stats.map((stat) => (
+              <div key={stat.label} className="flex flex-col items-center gap-0.5 px-2">
+                <span className="text-lg font-bold text-foreground">{stat.value}</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{stat.label}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/** LinkedIn‑style actions row */
+function ProfileActions({
+  profile,
+  onMore,
+}: {
+  profile: ProfileData;
+  onMore: () => void;
+}) {
+  return (
+    <div className="mx-4 mt-3 flex gap-2">
+      {/* 👉 REMOVED the big "Edit Profile" button */}
+      
+      {/* Social icons only + More */}
+      {profile.social.linkedin && (
+        <Button variant="outline" size="icon" className="rounded-xl h-10 w-10" asChild>
+          <a href={profile.social.linkedin} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+            <Linkedin className="h-4 w-4 text-blue-600" />
+          </a>
+        </Button>
+      )}
+      {profile.social.github && (
+        <Button variant="outline" size="icon" className="rounded-xl h-10 w-10" asChild>
+          <a href={profile.social.github} target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+            <Github className="h-4 w-4" />
+          </a>
+        </Button>
+      )}
+      {profile.social.portfolio && (
+        <Button variant="outline" size="icon" className="rounded-xl h-10 w-10" asChild>
+          <a href={profile.social.portfolio} target="_blank" rel="noopener noreferrer" aria-label="Portfolio">
+            <Globe className="h-4 w-4 text-blue-600" />
+          </a>
+        </Button>
+      )}
+      
+      {/* More options (Edit is inside here via Sheet) */}
+      <Button variant="outline" size="icon" className="rounded-xl h-10 w-10 ml-auto" onClick={onMore} aria-label="More options">
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+/** Experience timeline item */
+function ExperienceItem({ exp }: { exp: ProfileData['experience'][number] }) {
+  return (
+    <div className="relative pl-7">
+      {/* Timeline dot */}
+      <div className="absolute left-0 top-1 w-3 h-3 rounded-full bg-violet-500 border-2 border-background shadow" />
+      {/* Timeline line */}
+      <div className="absolute left-[5px] top-4 bottom-0 w-px bg-violet-100" />
+
+      <p className="text-sm font-semibold text-foreground leading-snug">{exp.title}</p>
+      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Building2 className="h-3 w-3" />{exp.company}
+        </span>
+        {exp.location && (
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <MapPin className="h-3 w-3" />{exp.location}
+          </span>
+        )}
+      </div>
+      <span className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+        <Calendar className="h-3 w-3" />
+        {formatDate(exp.startDate)} — {exp.current ? 'Present' : formatDate(exp.endDate)}
+        {exp.current && <Badge variant="outline" className="ml-1 text-[10px] py-0 h-4">Now</Badge>}
+      </span>
+      {exp.description && (
+        <p className="mt-2 text-xs text-foreground leading-relaxed whitespace-pre-line">{exp.description}</p>
+      )}
+    </div>
+  );
+}
+
+/** Education timeline item */
+function EducationItem({ edu }: { edu: ProfileData['education'][number] }) {
+  return (
+    <div className="relative pl-7">
+      <div className="absolute left-0 top-1 w-3 h-3 rounded-full bg-indigo-400 border-2 border-background shadow" />
+      <div className="absolute left-[5px] top-4 bottom-0 w-px bg-indigo-100" />
+
+      <p className="text-sm font-semibold text-foreground">{edu.degree}</p>
+      <p className="text-xs font-medium text-muted-foreground mt-0.5">{edu.institution}</p>
+      {edu.field && <p className="text-xs text-muted-foreground">{edu.field}</p>}
+      {edu.startDate && (
+        <span className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+          <Calendar className="h-3 w-3" />
+          {formatDate(edu.startDate)} — {edu.current ? 'Present' : formatDate(edu.endDate)}
+          {edu.current && <Badge variant="outline" className="ml-1 text-[10px] py-0 h-4">Now</Badge>}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Project card */
+function ProjectCard({ project }: { project: ProfileData['projects'][number] }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <Card className="rounded-2xl border shadow-sm overflow-hidden">
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-foreground leading-snug">{project.name}</p>
+            {project.associatedWith && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                <Building2 className="h-3 w-3 inline mr-1" />{project.associatedWith}
+              </p>
+            )}
+          </div>
+          {project.url && (
+            <a href={project.url} target="_blank" rel="noopener noreferrer"
+              className="flex-shrink-0 text-blue-600 hover:text-blue-700">
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          )}
+        </div>
+
+        {(project.startDate || project.current) && (
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Calendar className="h-3 w-3" />
+            {formatDate(project.startDate)} — {project.current ? 'Present' : formatDate(project.endDate)}
+          </span>
+        )}
+
+        {project.description && (
+          <p className={`text-xs text-foreground leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>
+            {project.description}
+          </p>
+        )}
+        {project.description && project.description.length > 120 && (
+          <button onClick={() => setExpanded(!expanded)}
+            className="text-xs text-violet-600 font-medium">
+            {expanded ? 'Show less' : 'Read more'}
+          </button>
+        )}
+
+        {project.technologies.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {project.technologies.map((t, i) => (
+              <Badge key={i} variant="secondary" className="text-[10px] px-2 py-0">{t}</Badge>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Profile Card View (View mode) ────────────────────────────────────────────
+
+function ProfileCardView({
+  profile,
+  user,
+  onEdit,
+}: {
+  profile: ProfileData;
+  user: { name?: string } | null;
+  onEdit: () => void;
+}) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  return (
+    <div className="pb-32">
+      {/* Hero */}
+      <ProfileHero profile={profile} user={user} onEdit={onEdit} />
+
+      {/* Stats — Instagram style */}
+      <ProfileStats profile={profile} />
+
+      {/* Actions — LinkedIn style */}
+      <ProfileActions profile={profile}  onMore={() => setMoreOpen(true)} />
+
+      {/* Tabbed content */}
+      {/* 🎨 Tab pill style: data-[state=active]:bg-violet-600 → change brand colour */}
+      <div className="mx-4 mt-4">
+        <Tabs defaultValue="overview">
+          <TabsList className="w-full rounded-2xl bg-muted p-1 h-auto grid grid-cols-4 gap-1">
+            {[
+              { value: 'overview', label: 'About' },
+              { value: 'experience', label: 'Work' },
+              { value: 'education', label: 'Study' },
+              { value: 'skills', label: 'Skills' },
+            ].map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="rounded-xl text-xs font-medium py-2 data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {/* Overview tab */}
+          <TabsContent value="overview" className="mt-3 space-y-3">
+            {profile.bio && (
+              <Card className="rounded-2xl border-0 shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">About</p>
+                  <p className="text-sm text-foreground leading-relaxed">{profile.bio}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Social links */}
+            {(profile.social.linkedin || profile.social.github || profile.social.portfolio || profile.social.twitter) && (
+              <Card className="rounded-2xl border-0 shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Links</p>
+                  <div className="space-y-2">
+                    {[
+                      { url: profile.social.linkedin, icon: <Linkedin className="h-4 w-4 text-blue-600" />, label: 'LinkedIn' },
+                      { url: profile.social.github, icon: <Github className="h-4 w-4" />, label: 'GitHub' },
+                      { url: profile.social.portfolio, icon: <Globe className="h-4 w-4 text-blue-600" />, label: 'Portfolio' },
+                      { url: profile.social.twitter, icon: <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>, label: 'Twitter/X' },
+                    ].filter(l => l.url).map(link => (
+                      <a key={link.label} href={link.url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-muted transition-colors">
+                        <div className="flex items-center gap-2">
+                          {link.icon}
+                          <span className="text-sm font-medium">{link.label}</span>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </a>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Projects preview in overview */}
+            {profile.projects.length > 0 && (
+              <Card className="rounded-2xl border-0 shadow-sm">
+                <CardContent className="p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Projects</p>
+                  <div className="space-y-3">
+                    {profile.projects.map((p, i) => <ProjectCard key={i} project={p} />)}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Experience tab */}
+          <TabsContent value="experience" className="mt-3">
+            <Card className="rounded-2xl border-0 shadow-sm">
+              <CardContent className="p-4">
+                {profile.experience.length === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground text-sm">
+                    No experience added yet.
+                    <br />
+                    <button onClick={onEdit} className="text-violet-600 font-medium mt-1 text-xs">Add experience →</button>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {profile.experience.map((exp, i) => <ExperienceItem key={i} exp={exp} />)}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Education tab */}
+          <TabsContent value="education" className="mt-3">
+            <Card className="rounded-2xl border-0 shadow-sm">
+              <CardContent className="p-4">
+                {profile.education.length === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground text-sm">
+                    No education added yet.
+                    <br />
+                    <button onClick={onEdit} className="text-violet-600 font-medium mt-1 text-xs">Add education →</button>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {profile.education.map((edu, i) => <EducationItem key={i} edu={edu} />)}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Skills tab */}
+          <TabsContent value="skills" className="mt-3">
+            <Card className="rounded-2xl border-0 shadow-sm">
+              <CardContent className="p-4">
+                {profile.skills.length === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground text-sm">
+                    No skills added yet.
+                    <br />
+                    <button onClick={onEdit} className="text-violet-600 font-medium mt-1 text-xs">Add skills →</button>
+                  </div>
+                ) : (
+                  <ScrollArea className="max-h-72">
+                    <div className="flex flex-wrap gap-2">
+                      {profile.skills.map((skill, i) => (
+                        <Badge key={i} variant="secondary" className="px-3 py-1 text-xs rounded-full">
+                          {skill}
+                        </Badge>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Bottom Sheet — More options */}
+      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl pb-8">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-base">More Options</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-2">
+            {[
+              { icon: <Share2 className="h-4 w-4" />, label: 'Share Profile', action: () => { navigator.share?.({ title: profile.name, url: window.location.href }); setMoreOpen(false); } },
+              { icon: <Edit2 className="h-4 w-4" />, label: 'Edit Profile', action: () => { onEdit(); setMoreOpen(false); } },
+              { icon: <Download className="h-4 w-4" />, label: 'Download Resume', action: () => setMoreOpen(false) },
+            ].map(item => (
+              <button key={item.label} onClick={item.action}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted transition-colors text-left">
+                <span className="text-muted-foreground">{item.icon}</span>
+                <span className="text-sm font-medium">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+// ─── Loading Skeleton ─────────────────────────────────────────────────────────
+
+function ProfileSkeleton() {
+  return (
+    <div className="space-y-4 px-4 pt-4">
+      <Skeleton className="h-28 w-full rounded-2xl" />
+      <div className="flex gap-3 items-end">
+        <Skeleton className="w-20 h-20 rounded-full" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-56" />
+        </div>
+      </div>
+      <Skeleton className="h-16 w-full rounded-2xl" />
+      <Skeleton className="h-10 w-full rounded-2xl" />
+      <Skeleton className="h-48 w-full rounded-2xl" />
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function ProfilePage() {
   const router = useRouter();
   const { user, isAuthenticated, loading: authLoading, refreshUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showProfileCard, setShowProfileCard] = useState(false);
+  const [profile, setProfile] = useState<ProfileData>(emptyProfile);
+  const [newSkill, setNewSkill] = useState('');
+  const [newTechnology, setNewTechnology] = useState('');
+  const [selectedProjectIndex, setSelectedProjectIndex] = useState<number | null>(null);
   const scrollRestoreKey = 'profile_scroll_position';
 
-  // Scroll restoration: Save scroll position
+  // ── Scroll restore ──
   useEffect(() => {
-    const handleScroll = () => {
-      sessionStorage.setItem(scrollRestoreKey, window.scrollY.toString());
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    const h = () => sessionStorage.setItem(scrollRestoreKey, window.scrollY.toString());
+    window.addEventListener('scroll', h, { passive: true });
+    return () => window.removeEventListener('scroll', h);
   }, []);
 
-  // Scroll restoration: Restore scroll position on mount
   useEffect(() => {
     if (!authLoading && isAuthenticated && !loading) {
-      const savedScrollPosition = sessionStorage.getItem(scrollRestoreKey);
-      if (savedScrollPosition) {
-        // Use requestAnimationFrame to ensure DOM is fully rendered
+      const saved = sessionStorage.getItem(scrollRestoreKey);
+      if (saved) {
         requestAnimationFrame(() => {
-          window.scrollTo(0, parseInt(savedScrollPosition, 10));
-          // Clear the saved position after restoring
+          window.scrollTo(0, parseInt(saved, 10));
           sessionStorage.removeItem(scrollRestoreKey);
         });
       } else {
-        // Scroll to top on first load
         window.scrollTo(0, 0);
       }
     }
   }, [authLoading, isAuthenticated, loading]);
-  const [profile, setProfile] = useState<ProfileData>({
-    name: '',
-    email: '',
-    phone: '',
-    location: '',
-    bio: '',
-    headline: '',
-    skills: [],
-    experience: [],
-    education: [],
-    projects: [],
-    preferences: {
-      jobTypes: [],
-      locations: [],
-      remotePreference: 'any',
-      salaryExpectation: { min: 0, max: 0, currency: 'USD' },
-      availability: ''
-    },
-    social: {
-      linkedin: '',
-      github: '',
-      portfolio: '',
-      twitter: ''
-    }
-  });
 
-  const [newSkill, setNewSkill] = useState('');
-  const [newTechnology, setNewTechnology] = useState('');
-  const [selectedProjectIndex, setSelectedProjectIndex] = useState<number | null>(null);
-
-  // Persist view mode changes to localStorage (works in production)
+  // ── Persist view mode ──
   useEffect(() => {
-    if (showProfileCard !== undefined && !loading) {
-      try {
-        localStorage.setItem('profileViewMode', showProfileCard ? 'card' : 'edit');
-      } catch (error) {
-        // localStorage might be disabled in private mode or by browser settings
-        // Silently fail - app will still work, just won't persist preference
-        console.warn('Could not save view preference to localStorage:', error);
-      }
+    if (!loading) {
+      try { localStorage.setItem('profileViewMode', showProfileCard ? 'card' : 'edit'); } catch { }
     }
   }, [showProfileCard, loading]);
 
+  // ── Auth guard ──
   useEffect(() => {
     if (!authLoading) {
-      if (!isAuthenticated) {
-        router.push('/auth/login');
-      } else {
-        // Fetch immediately when authenticated
-        fetchProfile();
-      }
+      if (!isAuthenticated) router.push('/auth/login');
+      else fetchProfile();
     }
-  }, [isAuthenticated, authLoading, router]);
+  }, [isAuthenticated, authLoading]);
 
   const fetchProfile = async () => {
     try {
       const response = await getProfile();
       if (response.success && response.data?.profile) {
-        const fetchedProfile = response.data.profile;
-        const hasData = fetchedProfile.name || fetchedProfile.headline || fetchedProfile.skills?.length > 0 || fetchedProfile.projects?.length > 0;
-        
+        const p = response.data.profile;
+        const hasData = p.name || p.headline || p.skills?.length > 0 || p.projects?.length > 0;
         setProfile({
-          _id: fetchedProfile._id,
-          name: fetchedProfile.name || '',
-          email: fetchedProfile.email || '',
-          phone: fetchedProfile.phone || '',
-          location: fetchedProfile.location || '',
-          bio: fetchedProfile.bio || '',
-          headline: fetchedProfile.headline || '',
-          skills: fetchedProfile.skills || [],
-          experience: fetchedProfile.experience || [],
-          education: fetchedProfile.education || [],
-          projects: fetchedProfile.projects || [],
+          _id: p._id,
+          name: p.name || '',
+          email: p.email || '',
+          phone: p.phone || '',
+          location: p.location || '',
+          bio: p.bio || '',
+          headline: p.headline || '',
+          skills: p.skills || [],
+          experience: p.experience || [],
+          education: p.education || [],
+          projects: p.projects || [],
           preferences: {
-            jobTypes: fetchedProfile.preferences?.jobTypes || [],
-            locations: fetchedProfile.preferences?.locations || [],
-            remotePreference: fetchedProfile.preferences?.remotePreference || 'any',
+            jobTypes: p.preferences?.jobTypes || [],
+            locations: p.preferences?.locations || [],
+            remotePreference: p.preferences?.remotePreference || 'any',
             salaryExpectation: {
-              min: fetchedProfile.preferences?.salaryExpectation?.min || 0,
-              max: fetchedProfile.preferences?.salaryExpectation?.max || 0,
-              currency: fetchedProfile.preferences?.salaryExpectation?.currency || 'USD'
+              min: p.preferences?.salaryExpectation?.min || 0,
+              max: p.preferences?.salaryExpectation?.max || 0,
+              currency: p.preferences?.salaryExpectation?.currency || 'USD',
             },
-            availability: fetchedProfile.preferences?.availability || ''
+            availability: p.preferences?.availability || '',
           },
           social: {
-            linkedin: fetchedProfile.social?.linkedin || '',
-            github: fetchedProfile.social?.github || '',
-            portfolio: fetchedProfile.social?.portfolio || '',
-            twitter: fetchedProfile.social?.twitter || ''
-          }
+            linkedin: p.social?.linkedin || '',
+            github: p.social?.github || '',
+            portfolio: p.social?.portfolio || '',
+            twitter: p.social?.twitter || '',
+          },
         });
-        
-        // Show profile card if user has saved data
-        // Check localStorage for user preference (works in production)
-        // Default: Show card if data exists, edit form if no data
         try {
-          const savedViewMode = localStorage.getItem('profileViewMode');
-          if (savedViewMode !== null && savedViewMode !== '') {
-            // Respect user's saved preference
-            setShowProfileCard(savedViewMode === 'card');
-          } else {
-            // Default: Show card if profile has data, otherwise show edit form
-            setShowProfileCard(hasData);
-            // Save default preference to localStorage
-            if (hasData) {
-              try {
-                localStorage.setItem('profileViewMode', 'card');
-              } catch (e) {
-                // Ignore localStorage errors
-              }
-            }
-          }
-        } catch (error) {
-          // localStorage might be disabled - fallback to default behavior
-          console.warn('Could not read view preference from localStorage:', error);
-          setShowProfileCard(hasData);
+          const savedView = localStorage.getItem('profileViewMode');
+          setShowProfileCard(savedView !== null ? savedView === 'card' : !!hasData);
+        } catch {
+          setShowProfileCard(!!hasData);
         }
       } else {
-        // No profile data - show edit form by default
         setShowProfileCard(false);
       }
-    } catch (error) {
-      console.error('Failed to fetch profile:', error);
+    } catch {
       toast.error('Failed to load profile');
-      // On error, default to edit form
       setShowProfileCard(false);
     } finally {
       setLoading(false);
@@ -246,1479 +672,492 @@ export default function ProfilePage() {
   };
 
   const handleSave = async () => {
-    // Enforce safe length limits before sending to backend to avoid 400 validation errors
-    const sanitizedProfile: ProfileData = {
+    const sanitized: ProfileData = {
       ...profile,
-      // Match UI limits / reasonable defaults
       headline: profile.headline?.slice(0, 100) || '',
       bio: profile.bio?.slice(0, 500) || '',
-      experience: profile.experience.map((exp) => ({
-        ...exp,
-        description: exp.description?.slice(0, 1000) || '',
-      })),
-      projects: profile.projects.map((project) => ({
-        ...project,
-        description: project.description?.slice(0, 1000) || '',
-      })),
+      experience: profile.experience.map(e => ({ ...e, description: e.description?.slice(0, 1000) || '' })),
+      projects: profile.projects.map(p => ({ ...p, description: p.description?.slice(0, 1000) || '' })),
     };
-
     setSaving(true);
     try {
-      console.log('Saving profile with projects:', sanitizedProfile.projects);
-      const response = await updateProfile(sanitizedProfile);
-      console.log('Save response:', response);
-      if (response.success) {
-        toast.success('Profile updated successfully!');
-        // Stay in edit mode after save so the user can continue editing.
-        // The user can manually exit to the profile view using the Exit button.
-        await fetchProfile(); // Refresh data
-        await refreshUser(); // Refresh user data in AuthContext to update header
+      const res = await updateProfile(sanitized);
+      if (res.success) {
+        toast.success('Profile updated!');
+        await fetchProfile();
+        await refreshUser();
+        // 👉 After a successful save, switch to card view
+        setShowProfileCard(true);
+        // (optional, but keeps it consistent with your persistence effect)
+        try {
+          localStorage.setItem('profileViewMode', 'card');
+        } catch { }
       }
-    } catch (err) {
-      const error = err as { response?: { data?: { error?: string } } };
-      console.error('Failed to update profile:', err);
-      console.error('Error details:', error.response?.data);
-      toast.error(error.response?.data?.error || 'Failed to update profile');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
   };
 
+  // ── Skill handlers ──
   const handleAddSkill = () => {
     if (newSkill.trim() && !profile.skills.includes(newSkill.trim())) {
-      setProfile({
-        ...profile,
-        skills: [...profile.skills, newSkill.trim()]
-      });
+      setProfile({ ...profile, skills: [...profile.skills, newSkill.trim()] });
       setNewSkill('');
     }
   };
+  const handleRemoveSkill = (s: string) =>
+    setProfile({ ...profile, skills: profile.skills.filter(x => x !== s) });
 
-  const handleRemoveSkill = (skillToRemove: string) => {
-    setProfile({
-      ...profile,
-      skills: profile.skills.filter(skill => skill !== skillToRemove)
-    });
+  // ── Experience handlers ──
+  const handleAddExperience = () =>
+    setProfile({ ...profile, experience: [...profile.experience, { title: '', company: '', location: '', startDate: '', endDate: '', current: false, description: '' }] });
+  const handleRemoveExperience = (i: number) =>
+    setProfile({ ...profile, experience: profile.experience.filter((_, idx) => idx !== i) });
+
+  // ── Education handlers ──
+  const handleAddEducation = () =>
+    setProfile({ ...profile, education: [...profile.education, { degree: '', institution: '', field: '', startDate: '', endDate: '', current: false }] });
+  const handleRemoveEducation = (i: number) =>
+    setProfile({ ...profile, education: profile.education.filter((_, idx) => idx !== i) });
+
+  // ── Project handlers ──
+  const handleAddProject = () =>
+    setProfile({ ...profile, projects: [...profile.projects, { name: '', associatedWith: '', startDate: '', endDate: '', current: false, description: '', url: '', technologies: [], media: [], collaborators: '' }] });
+  const handleRemoveProject = (i: number) =>
+    setProfile({ ...profile, projects: profile.projects.filter((_, idx) => idx !== i) });
+  const handleAddTechnology = (pi: number, tech: string) => {
+    if (!tech.trim() || profile.projects[pi].technologies.includes(tech.trim())) return;
+    const np = [...profile.projects];
+    np[pi].technologies = [...np[pi].technologies, tech.trim()];
+    setProfile({ ...profile, projects: np });
+  };
+  const handleRemoveTechnology = (pi: number, tech: string) => {
+    const np = [...profile.projects];
+    np[pi].technologies = np[pi].technologies.filter(t => t !== tech);
+    setProfile({ ...profile, projects: np });
   };
 
-  const handleAddExperience = () => {
-    setProfile({
-      ...profile,
-      experience: [
-        ...profile.experience,
-        {
-          title: '',
-          company: '',
-          location: '',
-          startDate: '',
-          endDate: '',
-          current: false,
-          description: ''
-        }
-      ]
-    });
+  // ── Back nav ──
+  const handleBack = () => {
+    const saved = sessionStorage.getItem('paginationState');
+    if (saved) {
+      try {
+        const s = JSON.parse(saved);
+        const p = new URLSearchParams();
+        if (s.query) p.set('q', s.query);
+        if (s.location) p.set('location', s.location);
+        router.push(`/?${p.toString()}`);
+      } catch { router.push('/'); }
+    } else router.push('/');
   };
 
-  const handleRemoveExperience = (index: number) => {
-    setProfile({
-      ...profile,
-      experience: profile.experience.filter((_, i) => i !== index)
-    });
-  };
-
-  const handleAddEducation = () => {
-    setProfile({
-      ...profile,
-      education: [
-        ...profile.education,
-        {
-          degree: '',
-          institution: '',
-          field: '',
-          startDate: '',
-          endDate: '',
-          current: false
-        }
-      ]
-    });
-  };
-
-  const handleRemoveEducation = (index: number) => {
-    setProfile({
-      ...profile,
-      education: profile.education.filter((_, i) => i !== index)
-    });
-  };
-
-  const handleAddProject = () => {
-    setProfile({
-      ...profile,
-      projects: [
-        ...profile.projects,
-        {
-          name: '',
-          associatedWith: '',
-          startDate: '',
-          endDate: '',
-          current: false,
-          description: '',
-          url: '',
-          technologies: [],
-          media: [],
-          collaborators: ''
-        }
-      ]
-    });
-  };
-
-  const handleRemoveProject = (index: number) => {
-    setProfile({
-      ...profile,
-      projects: profile.projects.filter((_, i) => i !== index)
-    });
-  };
-
-  const handleAddTechnology = (projectIndex: number, technology: string) => {
-    if (technology.trim() && !profile.projects[projectIndex].technologies.includes(technology.trim())) {
-      const newProjects = [...profile.projects];
-      newProjects[projectIndex].technologies = [...newProjects[projectIndex].technologies, technology.trim()];
-      setProfile({ ...profile, projects: newProjects });
-    }
-  };
-
-  const handleRemoveTechnology = (projectIndex: number, technologyToRemove: string) => {
-    const newProjects = [...profile.projects];
-    newProjects[projectIndex].technologies = newProjects[projectIndex].technologies.filter(
-      tech => tech !== technologyToRemove
-    );
-    setProfile({ ...profile, projects: newProjects });
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString || dateString.trim() === '') return 'Present';
-    
-    // Handle format: "YYYY-MM" (from month input) or "YYYY-MM-DD"
-    let parsedDate: Date;
-    
-    if (dateString.match(/^\d{4}-\d{2}$/)) {
-      // Format: "2022-09" - add day to make it valid
-      parsedDate = new Date(dateString + '-01');
-    } else if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      // Format: "2022-09-15"
-      parsedDate = new Date(dateString);
-    } else {
-      // Try parsing as-is
-      parsedDate = new Date(dateString);
-    }
-    
-    // Check if date is valid
-    if (isNaN(parsedDate.getTime())) {
-      console.error('Invalid date:', dateString);
-      return 'Invalid Date';
-    }
-    
-    return parsedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  };
-
-  // Only show full loading during initial auth check
-  // Allow progressive loading for profile data
+  // ── Auth loading ──
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="min-h-screen bg-background">
         <Header />
-        <div className="container mx-auto px-4 py-16 flex justify-center">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        </div>
+        <div className="flex justify-center py-16"><Loader2 className="h-10 w-10 animate-spin text-violet-600" /></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
       <Header />
 
-      <div className="container mx-auto px-4 pt-6 pb-24 max-w-5xl">
-        {/* Back to Search Button */}
-        <Button 
-          variant="ghost" 
-          onClick={() => {
-            // Check if we have saved search state
-            const savedState = sessionStorage.getItem('paginationState');
-            if (savedState) {
-              try {
-                const paginationState = JSON.parse(savedState);
-                // Navigate to search page with preserved search parameters
-                const searchParams = new URLSearchParams();
-                if (paginationState.query) searchParams.set('q', paginationState.query);
-                if (paginationState.location) searchParams.set('location', paginationState.location);
-                router.push(`/?${searchParams.toString()}`);
-              } catch (error) {
-                console.error('Failed to parse saved state:', error);
-                router.push('/');
-              }
-            } else {
-              // Fallback to home page if no saved state
-              router.push('/');
-            }
-          }} 
-          className="mb-6"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Search
-        </Button>
+      {/* ── Mobile-first max-w-md container ── */}
+      <div className="w-full max-w-lg mx-auto">
 
-        {/* Header Section */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold text-slate-900 mb-2">Your Profile</h1>
-            <p className="text-slate-600">
-              {showProfileCard 
-                ? 'View and manage your professional information'
-                : 'Complete your profile to get started'}
-            </p>
-          </div>
-          {showProfileCard && (
-            <Button
-              variant="outline"
-              onClick={() => setShowProfileCard(false)}
-              className="flex items-center gap-2"
-            >
-              <Edit2 className="h-4 w-4" />
-              Edit Profile
-            </Button>
-          )}
+        {/* Back + page title row */}
+        <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+          <Button variant="ghost" size="icon" onClick={handleBack} className="rounded-full h-9 w-9" aria-label="Back">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-semibold text-foreground">
+            {showProfileCard ? 'Your Profile' : 'Edit Profile'}
+          </span>
         </div>
 
-        {loading && !showProfileCard ? (
-          // Loading skeleton for profile forms
-          <div className="space-y-6">
-            <Card className="mb-6">
-              <CardHeader>
-                <div className="h-6 w-48 bg-slate-200 animate-pulse rounded" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="space-y-2">
-                    <div className="h-4 w-24 bg-slate-200 animate-pulse rounded" />
-                    <div className="h-10 w-full bg-slate-200 animate-pulse rounded" />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
+        {/* ── Loading state ── */}
+        {loading ? (
+          <ProfileSkeleton />
         ) : showProfileCard ? (
-          // ==================== PROFILE CARD VIEW ====================
-          <>
-            {/* Profile Header Card */}
-            <Card className="mb-8 border-2 shadow-xl">
-              <CardContent className="pt-6">
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-                  <div className="relative">
-                    {loading ? (
-                      <div className="w-32 h-32 rounded-full bg-slate-200 animate-pulse" />
-                    ) : (
-                      <>
-                        <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
-                          {profile.name?.charAt(0)?.toUpperCase() || user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                        </div>
-                        {profile.headline && (
-                          <div className="absolute -bottom-2 -right-2 bg-green-500 w-10 h-10 rounded-full border-4 border-white flex items-center justify-center">
-                            <Check className="h-5 w-5 text-white" />
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  <div className="flex-1">
-                    {loading ? (
-                      <div className="space-y-3">
-                        <div className="h-8 w-64 bg-slate-200 animate-pulse rounded" />
-                        <div className="h-6 w-48 bg-slate-200 animate-pulse rounded" />
-                      </div>
-                    ) : (
-                      <>
-                        <h1 className="text-3xl font-bold text-slate-900">
-                          {profile.name || 'Your Name'}
-                        </h1>
-                        {profile.headline && (
-                          <p className="text-lg text-blue-600 font-medium mt-1">
-                            {profile.headline}
-                          </p>
-                        )}
-                      </>
-                    )}
-
-                    <div className="flex flex-wrap gap-4 mt-4 text-slate-600">
-                      {profile.location && (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          <span>{profile.location}</span>
-                        </div>
-                      )}
-                      {profile.phone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4" />
-                          <span>{profile.phone}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4" />
-                        <span>{profile.email}</span>
-                      </div>
-                    </div>
-
-                    {profile.bio && (
-                      <p className="mt-4 text-slate-700 leading-relaxed">
-                        {profile.bio}
-                      </p>
-                    )}
-
-                    {/* Social Links Integration */}
-                    {(profile.social.linkedin || profile.social.github || profile.social.portfolio || profile.social.twitter) && (
-                      <div className="mt-6 pt-4 border-t">
-                        <div className="flex flex-wrap gap-3">
-                          {profile.social.linkedin && (
-                            <a
-                              href={profile.social.linkedin}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-slate-50 transition-colors"
-                            >
-                              <Linkedin className="h-4 w-4 text-blue-600" />
-                              <span className="text-sm font-medium">LinkedIn</span>
-                            </a>
-                          )}
-                          {profile.social.github && (
-                            <a
-                              href={profile.social.github}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-slate-50 transition-colors"
-                            >
-                              <Github className="h-4 w-4 text-slate-900" />
-                              <span className="text-sm font-medium">GitHub</span>
-                            </a>
-                          )}
-                          {profile.social.portfolio && (
-                            <a
-                              href={profile.social.portfolio}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-slate-50 transition-colors"
-                            >
-                              <Globe className="h-4 w-4 text-blue-600" />
-                              <span className="text-sm font-medium">Portfolio</span>
-                            </a>
-                          )}
-                          {profile.social.twitter && (
-                            <a
-                              href={profile.social.twitter}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 px-3 py-2 rounded-lg border hover:bg-slate-50 transition-colors"
-                            >
-                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                              </svg>
-                              <span className="text-sm font-medium">Twitter/X</span>
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Experience Card */}
-            {profile.experience.length > 0 && (
-              <Card className="mb-6">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-5 w-5 text-blue-600" />
-                    <CardTitle>Work Experience</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {profile.experience.map((exp, index) => (
-                      <div key={index} className="relative pl-8 pb-6 border-l-2 border-blue-200 last:pb-0">
-                        <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-blue-600 border-2 border-white" />
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-900">{exp.title}</h3>
-                          <div className="flex items-center gap-2 text-slate-600 mt-1">
-                            <Building2 className="h-4 w-4" />
-                            <span className="font-medium">{exp.company}</span>
-                            {exp.location && (
-                              <>
-                                <span>•</span>
-                                <MapPin className="h-4 w-4" />
-                                <span>{exp.location}</span>
-                              </>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-slate-500 mt-1">
-                            <Calendar className="h-4 w-4" />
-                            <span>
-                              {formatDate(exp.startDate)} - {exp.current ? 'Present' : formatDate(exp.endDate)}
-                            </span>
-                            {exp.current && (
-                              <Badge variant="outline" className="ml-2">Current</Badge>
-                            )}
-                          </div>
-                          {exp.description && (
-                            <p className="mt-3 text-slate-700 leading-relaxed">{exp.description}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Projects Card */}
-            {profile.projects.length > 0 && (
-              <Card className="mb-6">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Award className="h-5 w-5 text-purple-600" />
-                    <CardTitle>Projects</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {profile.projects.map((project, index) => (
-                      <Card 
-                        key={index} 
-                        className="border-2 hover:shadow-lg transition-shadow cursor-pointer"
-                        onClick={() => setSelectedProjectIndex(selectedProjectIndex === index ? null : index)}
-                      >
-                        <CardContent className="pt-6">
-                          <div className="space-y-3">
-                            {/* Project Title */}
-                            <div>
-                              <h3 className="text-xl font-bold text-slate-900">{project.name}</h3>
-                              {project.associatedWith && (
-                                <p className="text-sm text-slate-600 mt-1">
-                                  <Building2 className="h-3 w-3 inline mr-1" />
-                                  {project.associatedWith}
-                                </p>
-                              )}
-                            </div>
-
-                            {/* Duration */}
-                            {(project.startDate || project.endDate || project.current) && (
-                              <div className="flex items-center gap-2 text-sm text-slate-600">
-                                <Calendar className="h-4 w-4" />
-                                <span>
-                                  {formatDate(project.startDate)} - {project.current ? 'Present' : formatDate(project.endDate)}
-                                </span>
-                                {project.current && (
-                                  <Badge variant="outline" className="ml-2">In Progress</Badge>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Description */}
-                            {project.description && (
-                              <p className={`text-sm text-slate-700 ${selectedProjectIndex === index ? '' : 'line-clamp-3'}`}>
-                                {project.description}
-                              </p>
-                            )}
-
-                            {/* Technologies */}
-                            {project.technologies.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {project.technologies.map((tech, techIndex) => (
-                                  <Badge key={techIndex} variant="secondary" className="text-xs">
-                                    {tech}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Project URL */}
-                            {project.url && (
-                              <a
-                                href={project.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-                              >
-                                <Globe className="h-4 w-4" />
-                                View Project
-                              </a>
-                            )}
-
-                            {/* Collaborators */}
-                            {project.collaborators && (
-                              <div className="pt-2 border-t">
-                                <p className="text-xs text-slate-600">
-                                  <span className="font-medium">Collaborators:</span> {project.collaborators}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Education Card */}
-            {profile.education.length > 0 && (
-              <Card className="mb-6">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <GraduationCap className="h-5 w-5 text-blue-600" />
-                    <CardTitle>Education</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {profile.education.map((edu, index) => (
-                      <div key={index} className="relative pl-8 pb-6 border-l-2 border-purple-200 last:pb-0">
-                        <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-purple-600 border-2 border-white" />
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-900">{edu.degree}</h3>
-                          <p className="text-slate-700 font-medium mt-1">{edu.institution}</p>
-                          {edu.field && (
-                            <p className="text-slate-600 mt-1">{edu.field}</p>
-                          )}
-                          {edu.startDate && (
-                            <div className="flex items-center gap-2 text-sm text-slate-500 mt-2">
-                              <Calendar className="h-4 w-4" />
-                              <span>
-                                {formatDate(edu.startDate)} - {edu.current ? 'Present' : formatDate(edu.endDate)}
-                              </span>
-                              {edu.current && (
-                                <Badge variant="outline" className="ml-2">Current</Badge>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Skills Card */}
-            {profile.skills.length > 0 && (
-              <Card className="mb-6">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Award className="h-5 w-5 text-blue-600" />
-                    <CardTitle>Skills</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {profile.skills.map((skill, index) => (
-                      <Badge key={index} variant="secondary" className="px-3 py-1 text-sm">
-                        {skill}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-          </>
+          // ══════════════ PROFILE CARD VIEW ══════════════
+          <ProfileCardView profile={profile} user={user} onEdit={() => setShowProfileCard(false)} />
         ) : (
-          // ==================== PROFILE FORM VIEW ====================
-          <Tabs defaultValue="basic" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="basic">
-                <User className="h-4 w-4 mr-2" />
-                Basic
-              </TabsTrigger>
-              <TabsTrigger value="experience">
-                <Briefcase className="h-4 w-4 mr-2" />
-                Experience
-              </TabsTrigger>
-              <TabsTrigger value="education">
-                <GraduationCap className="h-4 w-4 mr-2" />
-                Education
-              </TabsTrigger>
-              <TabsTrigger value="projects">
-                <Award className="h-4 w-4 mr-2" />
-                Projects
-              </TabsTrigger>
-              <TabsTrigger value="preferences">
-                <Settings className="h-4 w-4 mr-2" />
-                Preferences
-              </TabsTrigger>
-              <TabsTrigger value="social">
-                <Link2 className="h-4 w-4 mr-2" />
-                Social
-              </TabsTrigger>
-            </TabsList>
+          // ══════════════ EDIT FORM VIEW ══════════════
+          <div className="px-4 pb-32 space-y-4">
 
-            {/* Basic Information Tab */}
-            <TabsContent value="basic" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Basic Information</CardTitle>
-                  <CardDescription>
-                    Your personal and contact information
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">
-                        <User className="h-4 w-4 inline mr-2" />
-                        Full Name
-                      </Label>
-                      <Input
-                        id="name"
-                        value={profile.name}
-                        onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                        placeholder="John Doe"
-                      />
+            {/* ── Edit form tabs ── */}
+            <Tabs defaultValue="basic">
+              {/* Horizontal scrollable tab list */}
+              <ScrollArea className="w-full">
+                <TabsList className="inline-flex w-max gap-1 rounded-2xl bg-muted p-1 mb-1">
+                  {[
+                    { value: 'basic', icon: <User className="h-3 w-3" />, label: 'Basic' },
+                    { value: 'experience', icon: <Briefcase className="h-3 w-3" />, label: 'Work' },
+                    { value: 'education', icon: <GraduationCap className="h-3 w-3" />, label: 'Education' },
+                    { value: 'projects', icon: <Award className="h-3 w-3" />, label: 'Projects' },
+                    { value: 'preferences', icon: <Settings className="h-3 w-3" />, label: 'Prefs' },
+                    { value: 'social', icon: <Link2 className="h-3 w-3" />, label: 'Social' },
+                  ].map(tab => (
+                    <TabsTrigger key={tab.value} value={tab.value}
+                      className="rounded-xl text-xs font-medium px-3 py-2 gap-1.5 data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-sm whitespace-nowrap">
+                      {tab.icon}{tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </ScrollArea>
+
+              {/* ── Basic tab ── */}
+              <TabsContent value="basic" className="space-y-4 mt-3">
+                <Card className="rounded-2xl shadow-sm border-0">
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Personal Info</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        { id: 'name', label: 'Full Name', icon: <User className="h-3.5 w-3.5" />, value: profile.name, placeholder: 'John Doe', onChange: (v: string) => setProfile({ ...profile, name: v }) },
+                        { id: 'phone', label: 'Phone', icon: <Phone className="h-3.5 w-3.5" />, value: profile.phone, placeholder: '+91 98765 43210', onChange: (v: string) => setProfile({ ...profile, phone: v }) },
+                        { id: 'location', label: 'Location', icon: <MapPin className="h-3.5 w-3.5" />, value: profile.location, placeholder: 'Mumbai, India', onChange: (v: string) => setProfile({ ...profile, location: v }) },
+                      ].map(f => (
+                        <div key={f.id} className="space-y-1.5">
+                          <Label htmlFor={f.id} className="text-xs flex items-center gap-1">{f.icon}{f.label}</Label>
+                          <Input id={f.id} value={f.value} onChange={e => f.onChange(e.target.value)} placeholder={f.placeholder} className="h-9 text-sm" />
+                        </div>
+                      ))}
+                      <div className="space-y-1.5">
+                        <Label htmlFor="email" className="text-xs flex items-center gap-1"><Mail className="h-3.5 w-3.5" />Email</Label>
+                        <Input id="email" value={profile.email} disabled className="h-9 text-sm bg-muted" />
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="email">
-                        <Mail className="h-4 w-4 inline mr-2" />
-                        Email
-                      </Label>
-                      <Input
-                        id="email"
-                        value={profile.email}
-                        disabled
-                        className="bg-slate-100"
-                      />
+                    <Separator />
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="headline" className="text-xs flex items-center gap-1"><Award className="h-3.5 w-3.5" />Headline</Label>
+                      <Input id="headline" value={profile.headline} onChange={e => setProfile({ ...profile, headline: e.target.value })} placeholder="Senior Engineer | ML Enthusiast" maxLength={100} className="h-9 text-sm" />
+                      <p className="text-[10px] text-muted-foreground text-right">{profile.headline.length}/100</p>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">
-                        <Phone className="h-4 w-4 inline mr-2" />
-                        Phone
-                      </Label>
-                      <Input
-                        id="phone"
-                        value={profile.phone}
-                        onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                        placeholder="+1 (555) 123-4567"
-                      />
+                    <div className="space-y-1.5">
+                      <Label htmlFor="bio" className="text-xs">Bio</Label>
+                      <Textarea id="bio" value={profile.bio} onChange={e => setProfile({ ...profile, bio: e.target.value })} placeholder="Tell us about yourself..." rows={3} maxLength={500} className="text-sm resize-none" />
+                      <p className="text-[10px] text-muted-foreground text-right">{profile.bio.length}/500</p>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="location">
-                        <MapPin className="h-4 w-4 inline mr-2" />
-                        Location
-                      </Label>
-                      <Input
-                        id="location"
-                        value={profile.location}
-                        onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-                        placeholder="San Francisco, CA"
-                      />
+                    <Separator />
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Skills</Label>
+                      <div className="flex gap-2">
+                        <Input value={newSkill} onChange={e => setNewSkill(e.target.value)} placeholder="e.g. React, Python" onKeyDown={e => e.key === 'Enter' && handleAddSkill()} className="h-9 text-sm" />
+                        <Button onClick={handleAddSkill} size="sm" className="h-9 px-3"><Plus className="h-4 w-4" /></Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {profile.skills.map((skill, i) => (
+                          <Badge key={i} variant="secondary" className="pl-3 pr-1.5 py-1 text-xs rounded-full flex items-center gap-1">
+                            {skill}
+                            <button onClick={() => handleRemoveSkill(skill)} className="hover:text-destructive transition-colors"><X className="h-3 w-3" /></button>
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-                  <Separator />
+              {/* ── Experience tab ── */}
+              <TabsContent value="experience" className="space-y-3 mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Work Experience</span>
+                  <Button onClick={handleAddExperience} variant="outline" size="sm" className="h-8 gap-1 rounded-xl text-xs">
+                    <Plus className="h-3.5 w-3.5" />Add
+                  </Button>
+                </div>
+                {profile.experience.length === 0 ? (
+                  <Card className="rounded-2xl border-0 shadow-sm">
+                    <CardContent className="py-10 flex flex-col items-center text-center gap-2">
+                      <Briefcase className="h-10 w-10 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">No experience yet</p>
+                      <Button onClick={handleAddExperience} variant="outline" size="sm" className="rounded-xl mt-1"><Plus className="h-3 w-3 mr-1" />Add Experience</Button>
+                    </CardContent>
+                  </Card>
+                ) : profile.experience.map((exp, i) => (
+                  <Card key={i} className="rounded-2xl border-0 shadow-sm">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Role {i + 1}</span>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveExperience(i)}><X className="h-3.5 w-3.5" /></Button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          { label: 'Job Title', value: exp.title, ph: 'Software Engineer', key: 'title' },
+                          { label: 'Company', value: exp.company, ph: 'Tech Corp', key: 'company' },
+                          { label: 'Location', value: exp.location, ph: 'Mumbai, India', key: 'location' },
+                        ].map(f => (
+                          <div key={f.key} className="space-y-1">
+                            <Label className="text-xs">{f.label}</Label>
+                            <Input value={f.value} placeholder={f.ph} className="h-8 text-sm"
+                              onChange={e => { const n = [...profile.experience]; (n[i] as any)[f.key] = e.target.value; setProfile({ ...profile, experience: n }); }} />
+                          </div>
+                        ))}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Start Date</Label>
+                          <Input type="month" value={exp.startDate} className="h-8 text-sm"
+                            onChange={e => { const n = [...profile.experience]; n[i].startDate = e.target.value; setProfile({ ...profile, experience: n }); }} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">End Date</Label>
+                          <Input type="month" value={exp.endDate} disabled={exp.current} className="h-8 text-sm"
+                            onChange={e => { const n = [...profile.experience]; n[i].endDate = e.target.value; setProfile({ ...profile, experience: n }); }} />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input type="checkbox" id={`cur-${i}`} checked={exp.current}
+                            onChange={e => { const n = [...profile.experience]; n[i].current = e.target.checked; if (e.target.checked) n[i].endDate = ''; setProfile({ ...profile, experience: n }); }}
+                            className="h-4 w-4 rounded" />
+                          <Label htmlFor={`cur-${i}`} className="text-xs">Current Role</Label>
+                        </div>
+                      </div>
+                      <MarkdownEditor label="Description" value={exp.description} maxLength={1000}
+                        onChange={v => { const n = [...profile.experience]; n[i].description = v; setProfile({ ...profile, experience: n }); }}
+                        placeholder="Describe your responsibilities and achievements..." />
+                    </CardContent>
+                  </Card>
+                ))}
+              </TabsContent>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="headline">
-                      <Award className="h-4 w-4 inline mr-2" />
-                      Professional Headline
-                    </Label>
-                    <Input
-                      id="headline"
-                      value={profile.headline}
-                      onChange={(e) => setProfile({ ...profile, headline: e.target.value })}
-                      placeholder="Senior Software Engineer | Full Stack Developer"
-                      maxLength={100}
-                    />
-                  </div>
+              {/* ── Education tab ── */}
+              <TabsContent value="education" className="space-y-3 mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Education</span>
+                  <Button onClick={handleAddEducation} variant="outline" size="sm" className="h-8 gap-1 rounded-xl text-xs"><Plus className="h-3.5 w-3.5" />Add</Button>
+                </div>
+                {profile.education.length === 0 ? (
+                  <Card className="rounded-2xl border-0 shadow-sm">
+                    <CardContent className="py-10 flex flex-col items-center text-center gap-2">
+                      <GraduationCap className="h-10 w-10 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">No education yet</p>
+                      <Button onClick={handleAddEducation} variant="outline" size="sm" className="rounded-xl mt-1"><Plus className="h-3 w-3 mr-1" />Add Education</Button>
+                    </CardContent>
+                  </Card>
+                ) : profile.education.map((edu, i) => (
+                  <Card key={i} className="rounded-2xl border-0 shadow-sm">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Degree {i + 1}</span>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveEducation(i)}><X className="h-3.5 w-3.5" /></Button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          { label: 'Degree', value: edu.degree, ph: 'B.Sc Computer Science', key: 'degree' },
+                          { label: 'Institution', value: edu.institution, ph: 'University Name', key: 'institution' },
+                          { label: 'Field of Study', value: edu.field, ph: 'Computer Science', key: 'field' },
+                        ].map(f => (
+                          <div key={f.key} className="space-y-1">
+                            <Label className="text-xs">{f.label}</Label>
+                            <Input value={f.value} placeholder={f.ph} className="h-8 text-sm"
+                              onChange={e => { const n = [...profile.education]; (n[i] as any)[f.key] = e.target.value; setProfile({ ...profile, education: n }); }} />
+                          </div>
+                        ))}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Start Date</Label>
+                          <Input type="month" value={edu.startDate} className="h-8 text-sm"
+                            onChange={e => { const n = [...profile.education]; n[i].startDate = e.target.value; setProfile({ ...profile, education: n }); }} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">End Date</Label>
+                          <Input type="month" value={edu.endDate} disabled={edu.current} className="h-8 text-sm"
+                            onChange={e => { const n = [...profile.education]; n[i].endDate = e.target.value; setProfile({ ...profile, education: n }); }} />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input type="checkbox" id={`edu-cur-${i}`} checked={edu.current}
+                            onChange={e => { const n = [...profile.education]; n[i].current = e.target.checked; if (e.target.checked) n[i].endDate = ''; setProfile({ ...profile, education: n }); }}
+                            className="h-4 w-4 rounded" />
+                          <Label htmlFor={`edu-cur-${i}`} className="text-xs">Currently Enrolled</Label>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </TabsContent>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="bio">Bio</Label>
-                    <Textarea
-                      id="bio"
-                      value={profile.bio}
-                      onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                      placeholder="Tell us about yourself..."
-                      rows={4}
-                      maxLength={500}
-                    />
-                    <p className="text-sm text-slate-500">
-                      {profile.bio.length}/500 characters
-                    </p>
-                  </div>
+              {/* ── Projects tab ── */}
+              <TabsContent value="projects" className="space-y-3 mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Projects</span>
+                  <Button onClick={handleAddProject} variant="outline" size="sm" className="h-8 gap-1 rounded-xl text-xs"><Plus className="h-3.5 w-3.5" />Add</Button>
+                </div>
+                {profile.projects.length === 0 ? (
+                  <Card className="rounded-2xl border-0 shadow-sm">
+                    <CardContent className="py-10 flex flex-col items-center text-center gap-2">
+                      <Award className="h-10 w-10 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">No projects yet</p>
+                      <Button onClick={handleAddProject} variant="outline" size="sm" className="rounded-xl mt-1"><Plus className="h-3 w-3 mr-1" />Add Project</Button>
+                    </CardContent>
+                  </Card>
+                ) : profile.projects.map((project, i) => (
+                  <Card key={i} className="rounded-2xl border-0 shadow-sm">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Project {i + 1}</span>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveProject(i)}><X className="h-3.5 w-3.5" /></Button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          { label: 'Project Name *', value: project.name, ph: 'E-Commerce Platform', key: 'name' },
+                          { label: 'Associated With', value: project.associatedWith, ph: 'Personal / Company', key: 'associatedWith' },
+                        ].map(f => (
+                          <div key={f.key} className="space-y-1">
+                            <Label className="text-xs">{f.label}</Label>
+                            <Input value={f.value} placeholder={f.ph} className="h-8 text-sm"
+                              onChange={e => { const n = [...profile.projects]; (n[i] as any)[f.key] = e.target.value; setProfile({ ...profile, projects: n }); }} />
+                          </div>
+                        ))}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Start Date</Label>
+                          <Input type="month" value={project.startDate} className="h-8 text-sm"
+                            onChange={e => { const n = [...profile.projects]; n[i].startDate = e.target.value; setProfile({ ...profile, projects: n }); }} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">End Date</Label>
+                          <Input type="month" value={project.endDate} disabled={project.current} className="h-8 text-sm"
+                            onChange={e => { const n = [...profile.projects]; n[i].endDate = e.target.value; setProfile({ ...profile, projects: n }); }} />
+                        </div>
+                        <div className="flex items-center gap-2 sm:col-span-2">
+                          <input type="checkbox" id={`proj-cur-${i}`} checked={project.current}
+                            onChange={e => { const n = [...profile.projects]; n[i].current = e.target.checked; if (e.target.checked) n[i].endDate = ''; setProfile({ ...profile, projects: n }); }}
+                            className="h-4 w-4 rounded" />
+                          <Label htmlFor={`proj-cur-${i}`} className="text-xs">Currently working on this</Label>
+                        </div>
+                      </div>
 
-                  <Separator />
+                      <div className="space-y-1">
+                        <Label className="text-xs">Description <span className="text-muted-foreground">({project.description?.length || 0}/1000)</span></Label>
+                        <Textarea value={project.description} placeholder="Describe your project..." rows={3} maxLength={1000} className="text-sm resize-none"
+                          onChange={e => { if (e.target.value.length <= 1000) { const n = [...profile.projects]; n[i].description = e.target.value; setProfile({ ...profile, projects: n }); } }} />
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label>Skills</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={newSkill}
-                        onChange={(e) => setNewSkill(e.target.value)}
-                        placeholder="Add a skill (e.g., React, Node.js)"
-                        onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
-                      />
-                      <Button onClick={handleAddSkill} type="button">
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Project URL</Label>
+                        <div className="flex gap-2">
+                          <Input type="url" value={project.url} placeholder="https://project.com" className="h-8 text-sm"
+                            onChange={e => { const n = [...profile.projects]; n[i].url = e.target.value; setProfile({ ...profile, projects: n }); }} />
+                          {project.url && (
+                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => window.open(project.url, '_blank')}><Globe className="h-3.5 w-3.5" /></Button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Technologies</Label>
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {project.technologies?.map((tech, ti) => (
+                            <Badge key={ti} variant="secondary" className="pl-2.5 pr-1.5 py-0.5 text-[11px] rounded-full flex items-center gap-1">
+                              {tech}
+                              <button onClick={() => handleRemoveTechnology(i, tech)} className="hover:text-destructive"><X className="h-2.5 w-2.5" /></button>
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <Input value={newTechnology} placeholder="e.g. React, Node.js" className="h-8 text-sm"
+                            onChange={e => setNewTechnology(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') { handleAddTechnology(i, newTechnology); setNewTechnology(''); } }} />
+                          <Button variant="outline" size="icon" className="h-8 w-8"
+                            onClick={() => { handleAddTechnology(i, newTechnology); setNewTechnology(''); }}><Plus className="h-3.5 w-3.5" /></Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-xs">Collaborators</Label>
+                        <Input value={project.collaborators} placeholder="e.g. John Doe, Jane Smith" className="h-8 text-sm"
+                          onChange={e => { const n = [...profile.projects]; n[i].collaborators = e.target.value; setProfile({ ...profile, projects: n }); }} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </TabsContent>
+
+              {/* ── Preferences tab ── */}
+              <TabsContent value="preferences" className="mt-3">
+                <Card className="rounded-2xl border-0 shadow-sm">
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Job Preferences</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Remote Preference</Label>
+                      <Select value={profile.preferences.remotePreference}
+                        onValueChange={v => setProfile({ ...profile, preferences: { ...profile.preferences, remotePreference: v } })}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {['remote', 'hybrid', 'onsite', 'any'].map(v => (
+                            <SelectItem key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {profile.skills.map((skill, index) => (
-                        <Badge key={index} variant="secondary" className="px-3 py-1 flex items-center gap-1">
-                          <span>{skill}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              console.log('Removing skill:', skill);
-                              handleRemoveSkill(skill);
-                            }}
-                            className="ml-1 hover:text-red-600 transition-colors"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Min Salary', key: 'min', value: profile.preferences.salaryExpectation.min },
+                        { label: 'Max Salary', key: 'max', value: profile.preferences.salaryExpectation.max },
+                      ].map(f => (
+                        <div key={f.key} className="space-y-1">
+                          <Label className="text-xs">{f.label}</Label>
+                          <Input type="number" value={f.value || ''} placeholder="0" className="h-9 text-sm"
+                            onChange={e => setProfile({ ...profile, preferences: { ...profile.preferences, salaryExpectation: { ...profile.preferences.salaryExpectation, [f.key]: parseInt(e.target.value) || 0 } } })} />
+                        </div>
                       ))}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Experience Tab */}
-            <TabsContent value="experience" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle>Work Experience</CardTitle>
-                      <CardDescription>
-                        Add your work history and achievements
-                      </CardDescription>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Availability</Label>
+                      <Input value={profile.preferences.availability} placeholder="Immediate / 2 weeks notice" className="h-9 text-sm"
+                        onChange={e => setProfile({ ...profile, preferences: { ...profile.preferences, availability: e.target.value } })} />
                     </div>
-                    <Button onClick={handleAddExperience} variant="outline">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Experience
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {profile.experience.length === 0 ? (
-                    <div className="text-center py-12 text-slate-500">
-                      <Briefcase className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-                      <p>No experience added yet</p>
-                      <p className="text-sm">Click &quot;Add Experience&quot; to get started</p>
-                    </div>
-                  ) : (
-                    profile.experience.map((exp, index) => (
-                      <Card key={index} className="border-2">
-                        <CardContent className="pt-6 space-y-4">
-                          <div className="flex justify-between items-start">
-                            <h3 className="text-lg font-semibold">Experience {index + 1}</h3>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveExperience(index)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>Job Title</Label>
-                              <Input
-                                value={exp.title}
-                                onChange={(e) => {
-                                  const newExp = [...profile.experience];
-                                  newExp[index].title = e.target.value;
-                                  setProfile({ ...profile, experience: newExp });
-                                }}
-                                placeholder="Software Engineer"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Company</Label>
-                              <Input
-                                value={exp.company}
-                                onChange={(e) => {
-                                  const newExp = [...profile.experience];
-                                  newExp[index].company = e.target.value;
-                                  setProfile({ ...profile, experience: newExp });
-                                }}
-                                placeholder="Tech Corp"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Location</Label>
-                              <Input
-                                value={exp.location}
-                                onChange={(e) => {
-                                  const newExp = [...profile.experience];
-                                  newExp[index].location = e.target.value;
-                                  setProfile({ ...profile, experience: newExp });
-                                }}
-                                placeholder="San Francisco, CA"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Start Date</Label>
-                              <Input
-                                type="month"
-                                value={exp.startDate}
-                                onChange={(e) => {
-                                  const newExp = [...profile.experience];
-                                  newExp[index].startDate = e.target.value;
-                                  setProfile({ ...profile, experience: newExp });
-                                }}
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>End Date</Label>
-                              <Input
-                                type="month"
-                                value={exp.endDate}
-                                onChange={(e) => {
-                                  const newExp = [...profile.experience];
-                                  newExp[index].endDate = e.target.value;
-                                  setProfile({ ...profile, experience: newExp });
-                                }}
-                                disabled={exp.current}
-                              />
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id={`current-${index}`}
-                                checked={exp.current}
-                                onChange={(e) => {
-                                  const newExp = [...profile.experience];
-                                  newExp[index].current = e.target.checked;
-                                  if (e.target.checked) {
-                                    newExp[index].endDate = '';
-                                  }
-                                  setProfile({ ...profile, experience: newExp });
-                                }}
-                                className="h-4 w-4"
-                              />
-                              <Label htmlFor={`current-${index}`}>Current Position</Label>
-                            </div>
-                          </div>
-
-                          <MarkdownEditor
-                            label="Description"
-                            value={exp.description}
-                            maxLength={1000}
-                            onChange={(next) => {
-                              const newExp = [...profile.experience];
-                              newExp[index].description = next;
-                              setProfile({ ...profile, experience: newExp });
-                            }}
-                            placeholder="Use markdown bullets to describe your responsibilities and achievements (start lines with '-' or '*')."
-                          />
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Education Tab */}
-            <TabsContent value="education" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle>Education</CardTitle>
-                      <CardDescription>
-                        Add your educational background
-                      </CardDescription>
-                    </div>
-                    <Button onClick={handleAddEducation} variant="outline">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Education
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {profile.education.length === 0 ? (
-                    <div className="text-center py-12 text-slate-500">
-                      <GraduationCap className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-                      <p>No education added yet</p>
-                      <p className="text-sm">Click &quot;Add Education&quot; to get started</p>
-                    </div>
-                  ) : (
-                    profile.education.map((edu, index) => (
-                      <Card key={index} className="border-2">
-                        <CardContent className="pt-6 space-y-4">
-                          <div className="flex justify-between items-start">
-                            <h3 className="text-lg font-semibold">Education {index + 1}</h3>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveEducation(index)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>Degree</Label>
-                              <Input
-                                value={edu.degree}
-                                onChange={(e) => {
-                                  const newEdu = [...profile.education];
-                                  newEdu[index].degree = e.target.value;
-                                  setProfile({ ...profile, education: newEdu });
-                                }}
-                                placeholder="Bachelor of Science"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Institution</Label>
-                              <Input
-                                value={edu.institution}
-                                onChange={(e) => {
-                                  const newEdu = [...profile.education];
-                                  newEdu[index].institution = e.target.value;
-                                  setProfile({ ...profile, education: newEdu });
-                                }}
-                                placeholder="University Name"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Field of Study</Label>
-                              <Input
-                                value={edu.field}
-                                onChange={(e) => {
-                                  const newEdu = [...profile.education];
-                                  newEdu[index].field = e.target.value;
-                                  setProfile({ ...profile, education: newEdu });
-                                }}
-                                placeholder="Computer Science"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Start Date</Label>
-                              <Input
-                                type="month"
-                                value={edu.startDate}
-                                onChange={(e) => {
-                                  const newEdu = [...profile.education];
-                                  newEdu[index].startDate = e.target.value;
-                                  setProfile({ ...profile, education: newEdu });
-                                }}
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>End Date</Label>
-                              <Input
-                                type="month"
-                                value={edu.endDate}
-                                onChange={(e) => {
-                                  const newEdu = [...profile.education];
-                                  newEdu[index].endDate = e.target.value;
-                                  setProfile({ ...profile, education: newEdu });
-                                }}
-                                disabled={edu.current}
-                              />
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id={`edu-current-${index}`}
-                                checked={edu.current}
-                                onChange={(e) => {
-                                  const newEdu = [...profile.education];
-                                  newEdu[index].current = e.target.checked;
-                                  if (e.target.checked) {
-                                    newEdu[index].endDate = '';
-                                  }
-                                  setProfile({ ...profile, education: newEdu });
-                                }}
-                                className="h-4 w-4"
-                              />
-                              <Label htmlFor={`edu-current-${index}`}>Currently Enrolled</Label>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Projects Tab */}
-            <TabsContent value="projects" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle>Projects</CardTitle>
-                      <CardDescription>
-                        Showcase your projects and achievements
-                      </CardDescription>
-                    </div>
-                    <Button onClick={handleAddProject} variant="outline">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Project
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {profile.projects.length === 0 ? (
-                    <div className="text-center py-12 text-slate-500">
-                      <Award className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-                      <p className="font-medium mb-2">No projects added yet</p>
-                      <p className="text-sm mb-4">Showcase your work to enhance your job applications</p>
-                      <Button onClick={handleAddProject} variant="outline" size="sm">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Your First Project
-                      </Button>
-                    </div>
-                  ) : (
-                    profile.projects.map((project, index) => (
-                      <Card key={index} className="border-2">
-                        <CardContent className="pt-6 space-y-4">
-                          <div className="flex justify-between items-start">
-                            <h3 className="text-lg font-semibold">Project {index + 1}</h3>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveProject(index)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>Project Name *</Label>
-                              <Input
-                                value={project.name || ''}
-                                onChange={(e) => {
-                                  const newProjects = [...profile.projects];
-                                  newProjects[index].name = e.target.value;
-                                  setProfile({ ...profile, projects: newProjects });
-                                }}
-                                placeholder="E-Commerce Platform"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Associated With</Label>
-                              <Input
-                                value={project.associatedWith || ''}
-                                onChange={(e) => {
-                                  const newProjects = [...profile.projects];
-                                  newProjects[index].associatedWith = e.target.value;
-                                  setProfile({ ...profile, projects: newProjects });
-                                }}
-                                placeholder="Personal Project, Company Name, etc."
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Start Date</Label>
-                              <Input
-                                type="month"
-                                value={project.startDate || ''}
-                                onChange={(e) => {
-                                  const newProjects = [...profile.projects];
-                                  newProjects[index].startDate = e.target.value;
-                                  setProfile({ ...profile, projects: newProjects });
-                                }}
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>End Date</Label>
-                              <Input
-                                type="month"
-                                value={project.endDate || ''}
-                                onChange={(e) => {
-                                  const newProjects = [...profile.projects];
-                                  newProjects[index].endDate = e.target.value;
-                                  setProfile({ ...profile, projects: newProjects });
-                                }}
-                                disabled={project.current}
-                              />
-                            </div>
-
-                            <div className="flex items-center space-x-2 md:col-span-2">
-                              <input
-                                type="checkbox"
-                                id={`project-current-${index}`}
-                                checked={project.current}
-                                onChange={(e) => {
-                                  const newProjects = [...profile.projects];
-                                  newProjects[index].current = e.target.checked;
-                                  if (e.target.checked) {
-                                    newProjects[index].endDate = '';
-                                  }
-                                  setProfile({ ...profile, projects: newProjects });
-                                }}
-                                className="h-4 w-4"
-                              />
-                              <Label htmlFor={`project-current-${index}`}>Currently working on this project</Label>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>
-                              Description 
-                              <span className="text-xs text-slate-500 ml-2">
-                                ({project.description?.length || 0}/1000 characters)
-                              </span>
-                            </Label>
-                            <Textarea
-                              value={project.description || ''}
-                              onChange={(e) => {
-                                if (e.target.value.length <= 1000) {
-                                  const newProjects = [...profile.projects];
-                                  newProjects[index].description = e.target.value;
-                                  setProfile({ ...profile, projects: newProjects });
-                                }
-                              }}
-                              placeholder="Describe your project, your role, key achievements, and impact..."
-                              rows={4}
-                              maxLength={1000}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Project URL</Label>
-                            <div className="flex gap-2">
-                              <Input
-                                type="url"
-                                value={project.url || ''}
-                                onChange={(e) => {
-                                  const newProjects = [...profile.projects];
-                                  newProjects[index].url = e.target.value;
-                                  setProfile({ ...profile, projects: newProjects });
-                                }}
-                                placeholder="https://project-demo.com"
-                              />
-                              {project.url && (
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => window.open(project.url, '_blank')}
-                                >
-                                  <Globe className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Technologies & Skills</Label>
-                            <div className="flex flex-wrap gap-2 mb-2">
-                              {project.technologies?.map((tech, techIndex) => (
-                                <Badge key={techIndex} variant="secondary" className="px-3 py-1 flex items-center gap-1">
-                                  <span>{tech}</span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleRemoveTechnology(index, tech);
-                                    }}
-                                    className="ml-1 hover:text-red-600 transition-colors"
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </Badge>
-                              ))}
-                            </div>
-                            <div className="flex gap-2">
-                              <Input
-                                value={newTechnology}
-                                onChange={(e) => setNewTechnology(e.target.value)}
-                                onKeyPress={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleAddTechnology(index, newTechnology);
-                                    setNewTechnology('');
-                                  }
-                                }}
-                                placeholder="Add a technology (e.g., React, Node.js)"
-                              />
-                              <Button
-                                type="button"
-                                onClick={() => {
-                                  handleAddTechnology(index, newTechnology);
-                                  setNewTechnology('');
-                                }}
-                                variant="outline"
-                                size="icon"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Collaborators</Label>
-                            <Input
-                              value={project.collaborators || ''}
-                              onChange={(e) => {
-                                const newProjects = [...profile.projects];
-                                newProjects[index].collaborators = e.target.value;
-                                setProfile({ ...profile, projects: newProjects });
-                              }}
-                              placeholder="e.g., John Doe, Jane Smith"
-                            />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Preferences Tab */}
-            <TabsContent value="preferences" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Job Preferences</CardTitle>
-                  <CardDescription>
-                    Set your job search preferences and requirements
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Remote Work Preference</Label>
-                    <Select
-                      value={profile.preferences.remotePreference}
-                      onValueChange={(value) =>
-                        setProfile({
-                          ...profile,
-                          preferences: { ...profile.preferences, remotePreference: value }
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="remote">Remote Only</SelectItem>
-                        <SelectItem value="hybrid">Hybrid</SelectItem>
-                        <SelectItem value="onsite">On-site</SelectItem>
-                        <SelectItem value="any">Any</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <Separator />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Minimum Salary (Annual)</Label>
-                      <Input
-                        type="number"
-                        value={profile.preferences.salaryExpectation.min || ''}
-                        onChange={(e) =>
-                          setProfile({
-                            ...profile,
-                            preferences: {
-                              ...profile.preferences,
-                              salaryExpectation: {
-                                ...profile.preferences.salaryExpectation,
-                                min: parseInt(e.target.value) || 0
-                              }
-                            }
-                          })
-                        }
-                        placeholder="50000"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Maximum Salary (Annual)</Label>
-                      <Input
-                        type="number"
-                        value={profile.preferences.salaryExpectation.max || ''}
-                        onChange={(e) =>
-                          setProfile({
-                            ...profile,
-                            preferences: {
-                              ...profile.preferences,
-                              salaryExpectation: {
-                                ...profile.preferences.salaryExpectation,
-                                max: parseInt(e.target.value) || 0
-                              }
-                            }
-                          })
-                        }
-                        placeholder="150000"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Availability</Label>
-                    <Input
-                      value={profile.preferences.availability}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          preferences: { ...profile.preferences, availability: e.target.value }
-                        })
-                      }
-                      placeholder="Immediate / 2 weeks notice / 1 month notice"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Social Links Tab */}
-            <TabsContent value="social" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Social Links</CardTitle>
-                  <CardDescription>
-                    Connect your professional profiles
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="linkedin">
-                      <Linkedin className="h-4 w-4 inline mr-2" />
-                      LinkedIn
-                    </Label>
-                    <Input
-                      id="linkedin"
-                      value={profile.social.linkedin}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          social: { ...profile.social, linkedin: e.target.value }
-                        })
-                      }
-                      placeholder="https://linkedin.com/in/username"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="github">
-                      <Github className="h-4 w-4 inline mr-2" />
-                      GitHub
-                    </Label>
-                    <Input
-                      id="github"
-                      value={profile.social.github}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          social: { ...profile.social, github: e.target.value }
-                        })
-                      }
-                      placeholder="https://github.com/username"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="portfolio">
-                      <Globe className="h-4 w-4 inline mr-2" />
-                      Portfolio Website
-                    </Label>
-                    <Input
-                      id="portfolio"
-                      value={profile.social.portfolio}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          social: { ...profile.social, portfolio: e.target.value }
-                        })
-                      }
-                      placeholder="https://yourportfolio.com"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="twitter">
-                      <svg className="h-4 w-4 inline mr-2" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                      </svg>
-                      Twitter/X
-                    </Label>
-                    <Input
-                      id="twitter"
-                      value={profile.social.twitter}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          social: { ...profile.social, twitter: e.target.value }
-                        })
-                      }
-                      placeholder="https://twitter.com/username"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        )}
-
-        {/* Floating Save / Exit Buttons (Only show in form mode) */}
-        {!showProfileCard && (
-          <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3">
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              size="lg"
-              className="shadow-2xl px-8 h-14 text-base font-semibold"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-5 w-5" />
-                  Save Profile
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-14 px-6"
-              disabled={saving}
-              onClick={() => setShowProfileCard(true)}
-            >
-              Exit
-            </Button>
+              {/* ── Social tab ── */}
+              <TabsContent value="social" className="mt-3">
+                <Card className="rounded-2xl border-0 shadow-sm">
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Social Links</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    {[
+                      { id: 'linkedin', label: 'LinkedIn', icon: <Linkedin className="h-3.5 w-3.5 text-blue-600" />, value: profile.social.linkedin, ph: 'https://linkedin.com/in/username', key: 'linkedin' },
+                      { id: 'github', label: 'GitHub', icon: <Github className="h-3.5 w-3.5" />, value: profile.social.github, ph: 'https://github.com/username', key: 'github' },
+                      { id: 'portfolio', label: 'Portfolio', icon: <Globe className="h-3.5 w-3.5 text-blue-600" />, value: profile.social.portfolio, ph: 'https://yourportfolio.com', key: 'portfolio' },
+                      { id: 'twitter', label: 'Twitter/X', icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>, value: profile.social.twitter, ph: 'https://twitter.com/username', key: 'twitter' },
+                    ].map(f => (
+                      <div key={f.id} className="space-y-1.5">
+                        <Label htmlFor={f.id} className="text-xs flex items-center gap-1.5">{f.icon}{f.label}</Label>
+                        <Input id={f.id} value={f.value} placeholder={f.ph} className="h-9 text-sm"
+                          onChange={e => setProfile({ ...profile, social: { ...profile.social, [f.key]: e.target.value } })} />
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
         )}
       </div>
+
+      {/* ── Sticky bottom bar (edit mode) ── */}
+      {!showProfileCard && !loading && (
+        // 🎨 Bottom bar background: bg-background/95 backdrop-blur → tweak opacity here
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t px-4 py-3"
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+          <div className="max-w-lg mx-auto flex gap-3">
+            <Button variant="outline" className="flex-1 h-12 rounded-xl text-sm" disabled={saving}
+              onClick={() => setShowProfileCard(true)}>
+              Cancel
+            </Button>
+            <Button className="flex-1 h-12 rounded-xl text-sm font-semibold gap-2 bg-violet-600 hover:bg-violet-700" disabled={saving} onClick={handleSave}>
+              {saving ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : <><Save className="h-4 w-4" />Save Profile</>}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
