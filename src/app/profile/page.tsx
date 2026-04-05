@@ -984,6 +984,7 @@ export default function ProfilePage() {
               </TabsContent>
 
               {/* ── Projects tab ── */}
+                {/* ── Projects tab ── */}
               <TabsContent value="projects" className="space-y-3 mt-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">Projects</span>
