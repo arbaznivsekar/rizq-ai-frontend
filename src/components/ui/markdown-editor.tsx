@@ -16,7 +16,7 @@ type MarkdownEditorProps = Omit<
 };
 
 export function MarkdownEditor({
-  value,
+  value = '',
   onChange,
   label,
   maxLength,
@@ -88,7 +88,7 @@ export function MarkdownEditor({
       onChange(next.slice(0, maxLength));
       return;
     }
-    onChange(next);
+    onChange(next); 
   };
 
   return (
@@ -98,7 +98,7 @@ export function MarkdownEditor({
           <span className="text-sm font-medium leading-none">{label}</span>
           {typeof maxLength === 'number' && (
             <span className="text-xs text-muted-foreground">
-              {value.length}/{maxLength}
+              {value?.length ?? 0}/{maxLength}
             </span>
           )}
         </div>
