@@ -88,7 +88,7 @@ export function MarkdownEditor({
       onChange(next.slice(0, maxLength));
       return;
     }
-    onChange(next);
+    onChange(next); 
   };
 
   return (
