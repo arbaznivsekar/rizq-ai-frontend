@@ -24,15 +24,7 @@ import {
   Settings, Award, Edit2, Check, Calendar, Building2, ArrowLeft,
   MoreHorizontal, Share2, Download, ExternalLink, ChevronRight,
 } from 'lucide-react';
-import dynamic from 'next/dynamic';
 
-const MarkdownEditor = dynamic(
-  () => import('@/components/ui/markdown-editor').then(m => ({ default: m.MarkdownEditor })),
-  {
-    ssr: false,
-    loading: () => <textarea className="w-full h-24 text-sm border rounded-md p-2 resize-none" placeholder="Describe your responsibilities..." />
-  }
-);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -889,9 +881,11 @@ export default function ProfilePage() {
                           <Label htmlFor={`cur-${i}`} className="text-xs">Current Role</Label>
                         </div>
                       </div>
-                      <MarkdownEditor label="Description" value={exp.description ?? ''} maxLength={1000}
-                        onChange={v => { const n = [...profile.experience]; n[i].description = v; setProfile({ ...profile, experience: n }); }}
-                        placeholder="Describe your responsibilities and achievements..." />
+                      <div className="space-y-1">
+  <Label className="text-xs">Description <span className="text-muted-foreground">({exp.description?.length ?? 0}/1000)</span></Label>
+  <Textarea value={exp.description ?? ''} placeholder="Describe your responsibilities and achievements..." rows={4} maxLength={1000} className="text-sm resize-none"
+    onChange={e => { const n = [...profile.experience]; n[i].description = e.target.value; setProfile({ ...profile, experience: n }); }} />
+</div>
                     </CardContent>
                   </Card>
                 ))}
