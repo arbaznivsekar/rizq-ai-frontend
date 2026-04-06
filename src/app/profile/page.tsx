@@ -339,7 +339,7 @@ function ProjectCard({ project }: { project: ProfileData['projects'][number] }) 
           </button>
         )}
 
-        {(project.technologies?.length ?? 0) > 0 && (
+{Array.isArray(project.technologies) && project.technologies.length > 0 && (
           <div className="flex flex-wrap gap-1 pt-1">
             {project.technologies?.map((t, i) => (
               <Badge key={i} variant="secondary" className="text-[10px] px-2 py-0">{t}</Badge>
@@ -592,9 +592,54 @@ export default function ProfilePage() {
   const fetchProfile = async () => {
     try {
       const response = await getProfile();
+  
       if (response.success && response.data?.profile) {
         const p = response.data.profile;
-        const hasData = p.name || p.headline || (Array.isArray(p.skills) && p.skills.length > 0) || (Array.isArray(p.projects) && p.projects.length > 0);
+  
+        const normalizedProjects = Array.isArray(p.projects)
+          ? p.projects.map((project: any) => ({
+              name: project?.name || '',
+              associatedWith: project?.associatedWith || '',
+              startDate: project?.startDate || '',
+              endDate: project?.endDate || '',
+              current: !!project?.current,
+              description: project?.description || '',
+              url: project?.url || '',
+              technologies: Array.isArray(project?.technologies) ? project.technologies : [],
+              media: Array.isArray(project?.media) ? project.media : [],
+              collaborators: project?.collaborators || '',
+            }))
+          : [];
+  
+        const normalizedExperience = Array.isArray(p.experience)
+          ? p.experience.map((exp: any) => ({
+              title: exp?.title || '',
+              company: exp?.company || '',
+              location: exp?.location || '',
+              startDate: exp?.startDate || '',
+              endDate: exp?.endDate || '',
+              current: !!exp?.current,
+              description: exp?.description || '',
+            }))
+          : [];
+  
+        const normalizedEducation = Array.isArray(p.education)
+          ? p.education.map((edu: any) => ({
+              degree: edu?.degree || '',
+              institution: edu?.institution || '',
+              field: edu?.field || '',
+              startDate: edu?.startDate || '',
+              endDate: edu?.endDate || '',
+              current: !!edu?.current,
+            }))
+          : [];
+  
+        const hasData =
+          !!p.name ||
+          !!p.headline ||
+          (Array.isArray(p.skills) && p.skills.length > 0) ||
+          normalizedProjects.length > 0;
+  
         setProfile({
           _id: p._id,
           name: p.name || '',
@@ -604,9 +649,9 @@ export default function ProfilePage() {
           bio: p.bio || '',
           headline: p.headline || '',
           skills: Array.isArray(p.skills) ? p.skills : [],
-          experience: Array.isArray(p.experience) ? p.experience : [],
-          education: Array.isArray(p.education) ? p.education : [],
-          projects: Array.isArray(p.projects) ? p.projects : [],
+          experience: normalizedExperience,
+          education: normalizedEducation,
+          projects: normalizedProjects,
           preferences: {
             jobTypes: Array.isArray(p.preferences?.jobTypes) ? p.preferences.jobTypes : [],
             locations: Array.isArray(p.preferences?.locations) ? p.preferences.locations : [],
@@ -625,6 +670,7 @@ export default function ProfilePage() {
             twitter: p.social?.twitter || '',
           },
         });
+  
         try {
           const savedView = localStorage.getItem('profileViewMode');
           setShowProfileCard(savedView !== null ? savedView === 'card' : !!hasData);
@@ -693,17 +739,34 @@ export default function ProfilePage() {
   const handleRemoveProject = (i: number) =>
     setProfile({ ...profile, projects: profile.projects.filter((_, idx) => idx !== i) });
   const handleAddTechnology = (pi: number, tech: string) => {
-    if (!tech.trim() || profile.projects[pi].technologies.includes(tech.trim())) return;
+    const value = tech.trim();
+    if (!value) return;
+  
     const np = [...profile.projects];
-    np[pi].technologies = [...np[pi].technologies, tech.trim()];
+    if (!np[pi]) return;
+  
+    np[pi] = {
+      ...np[pi],
+      technologies: Array.isArray(np[pi].technologies) ? np[pi].technologies : [],
+    };
+  
+    if (np[pi].technologies.includes(value)) return;
+  
+    np[pi].technologies = [...np[pi].technologies, value];
     setProfile({ ...profile, projects: np });
   };
   const handleRemoveTechnology = (pi: number, tech: string) => {
     const np = [...profile.projects];
+    if (!np[pi]) return;
+  
+    np[pi] = {
+      ...np[pi],
+      technologies: Array.isArray(np[pi].technologies) ? np[pi].technologies : [],
+    };
+  
     np[pi].technologies = np[pi].technologies.filter(t => t !== tech);
     setProfile({ ...profile, projects: np });
   };
-
   const handleBack = () => {
     const saved = sessionStorage.getItem('paginationState');
     if (saved) {
@@ -1048,7 +1111,7 @@ export default function ProfilePage() {
                       <div className="space-y-1.5">
                         <Label className="text-xs">Technologies</Label>
                         <div className="flex flex-wrap gap-1.5 mb-2">
-                          {project.technologies?.map((tech, ti) => (
+                          {Array.isArray(project.technologies) && project.technologies.map((tech, ti) => (
                             <Badge key={ti} variant="secondary" className="pl-2.5 pr-1.5 py-0.5 text-[11px] rounded-full flex items-center gap-1">
                               {tech}
                               <button onClick={() => handleRemoveTechnology(i, tech)} className="hover:text-destructive"><X className="h-2.5 w-2.5" /></button>
