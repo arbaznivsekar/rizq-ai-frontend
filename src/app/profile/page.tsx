@@ -24,6 +24,8 @@ import {
   Settings, Award, Edit2, Check, Calendar, Building2, ArrowLeft,
   MoreHorizontal, Share2, Download, ExternalLink, ChevronRight,
 } from 'lucide-react';
+
+
 import dynamic from 'next/dynamic';
 
 const MarkdownEditor = dynamic(
@@ -33,7 +35,6 @@ const MarkdownEditor = dynamic(
     loading: () => <textarea className="w-full h-24 text-sm border rounded-md p-2 resize-none" placeholder="Describe your responsibilities..." />
   }
 );
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ProfileData {
