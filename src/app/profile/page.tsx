@@ -24,7 +24,15 @@ import {
   Settings, Award, Edit2, Check, Calendar, Building2, ArrowLeft,
   MoreHorizontal, Share2, Download, ExternalLink, ChevronRight,
 } from 'lucide-react';
-import { MarkdownEditor } from '@/components/ui/markdown-editor';
+import dynamic from 'next/dynamic';
+
+const MarkdownEditor = dynamic(
+  () => import('@/components/ui/markdown-editor').then(m => ({ default: m.MarkdownEditor })),
+  {
+    ssr: false,
+    loading: () => <textarea className="w-full h-24 text-sm border rounded-md p-2 resize-none" placeholder="Describe your responsibilities..." />
+  }
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -105,7 +113,6 @@ function formatDate(dateString: string): string {
 
 // ─── Sub‑components (Profile Card View) ───────────────────────────────────────
 
-/** Instagram‑style hero header */
 function ProfileHero({
   profile,
   user,
@@ -119,17 +126,13 @@ function ProfileHero({
   const hasVerified = !!profile.headline;
 
   return (
-    // 🎨 Gradient band — tweak `from-violet-600 to-indigo-500` here for brand colour
     <div className="relative w-full">
       <div className="h-28 w-full bg-gradient-to-r from-violet-600 via-indigo-500 to-blue-500 rounded-t-2xl" />
 
       <Card className="mx-4 -mt-12 rounded-2xl shadow-xl border-0 overflow-visible">
         <CardContent className="pt-0 pb-5 px-4">
-
-          {/* Avatar row */}
           <div className="flex items-end justify-between -mt-10 mb-3">
             <div className="relative">
-              {/* 🎨 Avatar gradient — change from-violet-500 to-purple-600 to your taste */}
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold border-4 border-background shadow-lg">
                 {initials}
               </div>
@@ -140,25 +143,21 @@ function ProfileHero({
               )}
             </div>
 
-            {/* Edit button — LinkedIn style */}
             <Button size="sm" variant="outline" onClick={onEdit} className="rounded-full gap-1.5 h-8 px-3">
               <Edit2 className="h-3.5 w-3.5" />
               Edit
             </Button>
           </div>
 
-          {/* Name + headline */}
           <h1 className="text-xl font-bold text-foreground leading-tight">
             {profile.name || 'Your Name'}
           </h1>
           {profile.headline && (
-            // 🎨 Headline colour: text-violet-600 → change to your brand accent
             <p className="text-sm text-violet-600 font-medium mt-0.5 leading-snug">
               {profile.headline}
             </p>
           )}
 
-          {/* Meta row */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
             {profile.location && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -186,26 +185,15 @@ function ProfileHero({
   );
 }
 
-/** Instagram‑style stats row */
 function ProfileStats({ profile }: { profile: ProfileData }) {
   const stats = [
     { value: profile.experience?.length ?? 0, label: 'Roles' },
     { value: profile.skills?.length ?? 0, label: 'Skills' },
     { value: profile.projects?.length ?? 0, label: 'Projects' },
     { value: profile.education?.length ?? 0, label: 'Education' },
-    { value: profile.preferences?.jobTypes?.length ?? 0, label: 'Job Types' },
-    { value: profile.preferences?.locations?.length ?? 0, label: 'Locations' },
-    { value: profile.preferences?.remotePreference ?? 0, label: 'Remote Preference' },
-    { value: profile.preferences?.salaryExpectation?.min ?? 0, label: 'Salary Expectation' },
-    { value: profile.preferences?.availability ?? 0, label: 'Availability' },
-    { value: profile.social?.linkedin ?? 0, label: 'LinkedIn' },
-    { value: profile.social?.github ?? 0, label: 'GitHub' },
-    { value: profile.social?.portfolio ?? 0, label: 'Portfolio' },
-    { value: profile.social?.twitter ?? 0, label: 'Twitter' },
   ];
 
   return (
-    // 🎨 Stats bar background: bg-muted/50 → adjust for contrast
     <div className="mx-4 mt-3">
       <Card className="rounded-2xl border-0 shadow-sm bg-muted/50">
         <CardContent className="py-3 px-2">
@@ -223,7 +211,6 @@ function ProfileStats({ profile }: { profile: ProfileData }) {
   );
 }
 
-/** LinkedIn‑style actions row */
 function ProfileActions({
   profile,
   onMore,
@@ -233,24 +220,21 @@ function ProfileActions({
 }) {
   return (
     <div className="mx-4 mt-3 flex gap-2">
-      {/* 👉 REMOVED the big "Edit Profile" button */}
-      
-      {/* Social icons only + More */}
-      {profile.social.linkedin && (
+      {profile.social?.linkedin && (
         <Button variant="outline" size="icon" className="rounded-xl h-10 w-10" asChild>
           <a href={profile.social.linkedin} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
             <Linkedin className="h-4 w-4 text-blue-600" />
           </a>
         </Button>
       )}
-      {profile.social.github && (
+      {profile.social?.github && (
         <Button variant="outline" size="icon" className="rounded-xl h-10 w-10" asChild>
           <a href={profile.social.github} target="_blank" rel="noopener noreferrer" aria-label="GitHub">
             <Github className="h-4 w-4" />
           </a>
         </Button>
       )}
-      {profile.social.portfolio && (
+      {profile.social?.portfolio && (
         <Button variant="outline" size="icon" className="rounded-xl h-10 w-10" asChild>
           <a href={profile.social.portfolio} target="_blank" rel="noopener noreferrer" aria-label="Portfolio">
             <Globe className="h-4 w-4 text-blue-600" />
@@ -258,20 +242,17 @@ function ProfileActions({
         </Button>
       )}
       
-      {/* More options (Edit is inside here via Sheet) */}
       <Button variant="outline" size="icon" className="rounded-xl h-10 w-10 ml-auto" onClick={onMore} aria-label="More options">
         <MoreHorizontal className="h-4 w-4" />
       </Button>
     </div>
   );
 }
-/** Experience timeline item */
+
 function ExperienceItem({ exp }: { exp: ProfileData['experience'][number] }) {
   return (
     <div className="relative pl-7">
-      {/* Timeline dot */}
       <div className="absolute left-0 top-1 w-3 h-3 rounded-full bg-violet-500 border-2 border-background shadow" />
-      {/* Timeline line */}
       <div className="absolute left-[5px] top-4 bottom-0 w-px bg-violet-100" />
 
       <p className="text-sm font-semibold text-foreground leading-snug">{exp.title}</p>
@@ -297,7 +278,6 @@ function ExperienceItem({ exp }: { exp: ProfileData['experience'][number] }) {
   );
 }
 
-/** Education timeline item */
 function EducationItem({ edu }: { edu: ProfileData['education'][number] }) {
   return (
     <div className="relative pl-7">
@@ -318,7 +298,6 @@ function EducationItem({ edu }: { edu: ProfileData['education'][number] }) {
   );
 }
 
-/** Project card */
 function ProjectCard({ project }: { project: ProfileData['projects'][number] }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -353,16 +332,16 @@ function ProjectCard({ project }: { project: ProfileData['projects'][number] }) 
             {project.description}
           </p>
         )}
-        {project.description && project.description.length > 120 && (
+        {project.description && (project.description?.length ?? 0) > 120 && (
           <button onClick={() => setExpanded(!expanded)}
             className="text-xs text-violet-600 font-medium">
             {expanded ? 'Show less' : 'Read more'}
           </button>
         )}
 
-        {project.technologies.length > 0 && (
+        {(project.technologies?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1 pt-1">
-            {project.technologies.map((t, i) => (
+            {project.technologies?.map((t, i) => (
               <Badge key={i} variant="secondary" className="text-[10px] px-2 py-0">{t}</Badge>
             ))}
           </div>
@@ -372,7 +351,7 @@ function ProjectCard({ project }: { project: ProfileData['projects'][number] }) 
   );
 }
 
-// ─── Profile Card View (View mode) ────────────────────────────────────────────
+// ─── Profile Card View ────────────────────────────────────────────────────────
 
 function ProfileCardView({
   profile,
@@ -387,17 +366,10 @@ function ProfileCardView({
 
   return (
     <div className="pb-32">
-      {/* Hero */}
       <ProfileHero profile={profile} user={user} onEdit={onEdit} />
-
-      {/* Stats — Instagram style */}
       <ProfileStats profile={profile} />
+      <ProfileActions profile={profile} onMore={() => setMoreOpen(true)} />
 
-      {/* Actions — LinkedIn style */}
-      <ProfileActions profile={profile}  onMore={() => setMoreOpen(true)} />
-
-      {/* Tabbed content */}
-      {/* 🎨 Tab pill style: data-[state=active]:bg-violet-600 → change brand colour */}
       <div className="mx-4 mt-4">
         <Tabs defaultValue="overview">
           <TabsList className="w-full rounded-2xl bg-muted p-1 h-auto grid grid-cols-4 gap-1">
@@ -417,7 +389,6 @@ function ProfileCardView({
             ))}
           </TabsList>
 
-          {/* Overview tab */}
           <TabsContent value="overview" className="mt-3 space-y-3">
             {profile.bio && (
               <Card className="rounded-2xl border-0 shadow-sm">
@@ -428,17 +399,16 @@ function ProfileCardView({
               </Card>
             )}
 
-            {/* Social links */}
-            {(profile.social.linkedin || profile.social.github || profile.social.portfolio || profile.social.twitter) && (
+            {(profile.social?.linkedin || profile.social?.github || profile.social?.portfolio || profile.social?.twitter) && (
               <Card className="rounded-2xl border-0 shadow-sm">
                 <CardContent className="p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Links</p>
                   <div className="space-y-2">
                     {[
-                      { url: profile.social.linkedin, icon: <Linkedin className="h-4 w-4 text-blue-600" />, label: 'LinkedIn' },
-                      { url: profile.social.github, icon: <Github className="h-4 w-4" />, label: 'GitHub' },
-                      { url: profile.social.portfolio, icon: <Globe className="h-4 w-4 text-blue-600" />, label: 'Portfolio' },
-                      { url: profile.social.twitter, icon: <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>, label: 'Twitter/X' },
+                      { url: profile.social?.linkedin, icon: <Linkedin className="h-4 w-4 text-blue-600" />, label: 'LinkedIn' },
+                      { url: profile.social?.github, icon: <Github className="h-4 w-4" />, label: 'GitHub' },
+                      { url: profile.social?.portfolio, icon: <Globe className="h-4 w-4 text-blue-600" />, label: 'Portfolio' },
+                      { url: profile.social?.twitter, icon: <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>, label: 'Twitter/X' },
                     ].filter(l => l.url).map(link => (
                       <a key={link.label} href={link.url} target="_blank" rel="noopener noreferrer"
                         className="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-muted transition-colors">
@@ -454,24 +424,22 @@ function ProfileCardView({
               </Card>
             )}
 
-            {/* Projects preview in overview */}
-            {profile.projects.length > 0 && (
+            {(profile.projects?.length ?? 0) > 0 && (
               <Card className="rounded-2xl border-0 shadow-sm">
                 <CardContent className="p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Projects</p>
                   <div className="space-y-3">
-                    {profile.projects.map((p, i) => <ProjectCard key={i} project={p} />)}
+                    {profile.projects?.map((p, i) => <ProjectCard key={i} project={p} />)}
                   </div>
                 </CardContent>
               </Card>
             )}
           </TabsContent>
 
-          {/* Experience tab */}
           <TabsContent value="experience" className="mt-3">
             <Card className="rounded-2xl border-0 shadow-sm">
               <CardContent className="p-4">
-                {profile.experience.length === 0 ? (
+                {(profile.experience?.length ?? 0) === 0 ? (
                   <div className="py-8 text-center text-muted-foreground text-sm">
                     No experience added yet.
                     <br />
@@ -479,18 +447,17 @@ function ProfileCardView({
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    {profile.experience.map((exp, i) => <ExperienceItem key={i} exp={exp} />)}
+                    {profile.experience?.map((exp, i) => <ExperienceItem key={i} exp={exp} />)}
                   </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Education tab */}
           <TabsContent value="education" className="mt-3">
             <Card className="rounded-2xl border-0 shadow-sm">
               <CardContent className="p-4">
-                {profile.education.length === 0 ? (
+                {(profile.education?.length ?? 0) === 0 ? (
                   <div className="py-8 text-center text-muted-foreground text-sm">
                     No education added yet.
                     <br />
@@ -498,18 +465,17 @@ function ProfileCardView({
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    {profile.education.map((edu, i) => <EducationItem key={i} edu={edu} />)}
+                    {profile.education?.map((edu, i) => <EducationItem key={i} edu={edu} />)}
                   </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Skills tab */}
           <TabsContent value="skills" className="mt-3">
             <Card className="rounded-2xl border-0 shadow-sm">
               <CardContent className="p-4">
-                {profile.skills.length === 0 ? (
+                {(profile.skills?.length ?? 0) === 0 ? (
                   <div className="py-8 text-center text-muted-foreground text-sm">
                     No skills added yet.
                     <br />
@@ -518,7 +484,7 @@ function ProfileCardView({
                 ) : (
                   <ScrollArea className="max-h-72">
                     <div className="flex flex-wrap gap-2">
-                      {profile.skills.map((skill, i) => (
+                      {profile.skills?.map((skill, i) => (
                         <Badge key={i} variant="secondary" className="px-3 py-1 text-xs rounded-full">
                           {skill}
                         </Badge>
@@ -532,7 +498,6 @@ function ProfileCardView({
         </Tabs>
       </div>
 
-      {/* Bottom Sheet — More options */}
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
         <SheetContent side="bottom" className="rounded-t-3xl pb-8">
           <SheetHeader className="mb-4">
@@ -591,7 +556,6 @@ export default function ProfilePage() {
   const [selectedProjectIndex, setSelectedProjectIndex] = useState<number | null>(null);
   const scrollRestoreKey = 'profile_scroll_position';
 
-  // ── Scroll restore ──
   useEffect(() => {
     const h = () => sessionStorage.setItem(scrollRestoreKey, window.scrollY.toString());
     window.addEventListener('scroll', h, { passive: true });
@@ -612,14 +576,12 @@ export default function ProfilePage() {
     }
   }, [authLoading, isAuthenticated, loading]);
 
-  // ── Persist view mode ──
   useEffect(() => {
     if (!loading) {
       try { localStorage.setItem('profileViewMode', showProfileCard ? 'card' : 'edit'); } catch { }
     }
   }, [showProfileCard, loading]);
 
-  // ── Auth guard ──
   useEffect(() => {
     if (!authLoading) {
       if (!isAuthenticated) router.push('/auth/login');
@@ -632,7 +594,7 @@ export default function ProfilePage() {
       const response = await getProfile();
       if (response.success && response.data?.profile) {
         const p = response.data.profile;
-        const hasData = p.name || p.headline || p.skills?.length > 0 || p.projects?.length > 0;
+        const hasData = p.name || p.headline || (Array.isArray(p.skills) && p.skills.length > 0) || (Array.isArray(p.projects) && p.projects.length > 0);
         setProfile({
           _id: p._id,
           name: p.name || '',
@@ -645,10 +607,9 @@ export default function ProfilePage() {
           experience: Array.isArray(p.experience) ? p.experience : [],
           education: Array.isArray(p.education) ? p.education : [],
           projects: Array.isArray(p.projects) ? p.projects : [],
-          
           preferences: {
-            jobTypes: p.preferences?.jobTypes || [],
-            locations: p.preferences?.locations || [],
+            jobTypes: Array.isArray(p.preferences?.jobTypes) ? p.preferences.jobTypes : [],
+            locations: Array.isArray(p.preferences?.locations) ? p.preferences.locations : [],
             remotePreference: p.preferences?.remotePreference || 'any',
             salaryExpectation: {
               min: p.preferences?.salaryExpectation?.min || 0,
@@ -696,9 +657,7 @@ export default function ProfilePage() {
         toast.success('Profile updated!');
         await fetchProfile();
         await refreshUser();
-        // 👉 After a successful save, switch to card view
         setShowProfileCard(true);
-        // (optional, but keeps it consistent with your persistence effect)
         try {
           localStorage.setItem('profileViewMode', 'card');
         } catch { }
@@ -710,7 +669,6 @@ export default function ProfilePage() {
     }
   };
 
-  // ── Skill handlers ──
   const handleAddSkill = () => {
     if (newSkill.trim() && !profile.skills.includes(newSkill.trim())) {
       setProfile({ ...profile, skills: [...profile.skills, newSkill.trim()] });
@@ -720,19 +678,16 @@ export default function ProfilePage() {
   const handleRemoveSkill = (s: string) =>
     setProfile({ ...profile, skills: profile.skills.filter(x => x !== s) });
 
-  // ── Experience handlers ──
   const handleAddExperience = () =>
     setProfile({ ...profile, experience: [...profile.experience, { title: '', company: '', location: '', startDate: '', endDate: '', current: false, description: '' }] });
   const handleRemoveExperience = (i: number) =>
     setProfile({ ...profile, experience: profile.experience.filter((_, idx) => idx !== i) });
 
-  // ── Education handlers ──
   const handleAddEducation = () =>
     setProfile({ ...profile, education: [...profile.education, { degree: '', institution: '', field: '', startDate: '', endDate: '', current: false }] });
   const handleRemoveEducation = (i: number) =>
     setProfile({ ...profile, education: profile.education.filter((_, idx) => idx !== i) });
 
-  // ── Project handlers ──
   const handleAddProject = () =>
     setProfile({ ...profile, projects: [...profile.projects, { name: '', associatedWith: '', startDate: '', endDate: '', current: false, description: '', url: '', technologies: [], media: [], collaborators: '' }] });
   const handleRemoveProject = (i: number) =>
@@ -749,7 +704,6 @@ export default function ProfilePage() {
     setProfile({ ...profile, projects: np });
   };
 
-  // ── Back nav ──
   const handleBack = () => {
     const saved = sessionStorage.getItem('paginationState');
     if (saved) {
@@ -763,7 +717,6 @@ export default function ProfilePage() {
     } else router.push('/');
   };
 
-  // ── Auth loading ──
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -777,10 +730,8 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
       <Header />
 
-      {/* ── Mobile-first max-w-md container ── */}
       <div className="w-full max-w-lg mx-auto">
 
-        {/* Back + page title row */}
         <div className="flex items-center gap-2 px-4 pt-4 pb-2">
           <Button variant="ghost" size="icon" onClick={handleBack} className="rounded-full h-9 w-9" aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
@@ -790,19 +741,14 @@ export default function ProfilePage() {
           </span>
         </div>
 
-        {/* ── Loading state ── */}
         {loading ? (
           <ProfileSkeleton />
         ) : showProfileCard ? (
-          // ══════════════ PROFILE CARD VIEW ══════════════
           <ProfileCardView profile={profile} user={user} onEdit={() => setShowProfileCard(false)} />
         ) : (
-          // ══════════════ EDIT FORM VIEW ══════════════
           <div className="px-4 pb-32 space-y-4">
 
-            {/* ── Edit form tabs ── */}
             <Tabs defaultValue="basic">
-              {/* Horizontal scrollable tab list */}
               <ScrollArea className="w-full">
                 <TabsList className="inline-flex w-max gap-1 rounded-2xl bg-muted p-1 mb-1">
                   {[
@@ -848,13 +794,13 @@ export default function ProfilePage() {
                     <div className="space-y-1.5">
                       <Label htmlFor="headline" className="text-xs flex items-center gap-1"><Award className="h-3.5 w-3.5" />Headline</Label>
                       <Input id="headline" value={profile.headline} onChange={e => setProfile({ ...profile, headline: e.target.value })} placeholder="Senior Engineer | ML Enthusiast" maxLength={100} className="h-9 text-sm" />
-                      <p className="text-[10px] text-muted-foreground text-right">{profile.headline.length}/100</p>
+                      <p className="text-[10px] text-muted-foreground text-right">{profile.headline?.length ?? 0}/100</p>
                     </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="bio" className="text-xs">Bio</Label>
                       <Textarea id="bio" value={profile.bio} onChange={e => setProfile({ ...profile, bio: e.target.value })} placeholder="Tell us about yourself..." rows={3} maxLength={500} className="text-sm resize-none" />
-                      <p className="text-[10px] text-muted-foreground text-right">{profile.bio.length}/500</p>
+                      <p className="text-[10px] text-muted-foreground text-right">{profile.bio?.length ?? 0}/500</p>
                     </div>
 
                     <Separator />
@@ -866,7 +812,7 @@ export default function ProfilePage() {
                         <Button onClick={handleAddSkill} size="sm" className="h-9 px-3"><Plus className="h-4 w-4" /></Button>
                       </div>
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {profile.skills.map((skill, i) => (
+                        {profile.skills?.map((skill, i) => (
                           <Badge key={i} variant="secondary" className="pl-3 pr-1.5 py-1 text-xs rounded-full flex items-center gap-1">
                             {skill}
                             <button onClick={() => handleRemoveSkill(skill)} className="hover:text-destructive transition-colors"><X className="h-3 w-3" /></button>
@@ -886,7 +832,7 @@ export default function ProfilePage() {
                     <Plus className="h-3.5 w-3.5" />Add
                   </Button>
                 </div>
-                {profile.experience.length === 0 ? (
+                {(profile.experience?.length ?? 0) === 0 ? (
                   <Card className="rounded-2xl border-0 shadow-sm">
                     <CardContent className="py-10 flex flex-col items-center text-center gap-2">
                       <Briefcase className="h-10 w-10 text-muted-foreground/40" />
@@ -894,7 +840,7 @@ export default function ProfilePage() {
                       <Button onClick={handleAddExperience} variant="outline" size="sm" className="rounded-xl mt-1"><Plus className="h-3 w-3 mr-1" />Add Experience</Button>
                     </CardContent>
                   </Card>
-                ) : profile.experience.map((exp, i) => (
+                ) : profile.experience?.map((exp, i) => (
                   <Card key={i} className="rounded-2xl border-0 shadow-sm">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center justify-between">
@@ -915,12 +861,25 @@ export default function ProfilePage() {
                         ))}
                         <div className="space-y-1">
                           <Label className="text-xs">Start Date</Label>
-                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={exp.startDate} className="h-8 text-sm"
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="\d{4}-\d{2}"
+                            placeholder="YYYY-MM"
+                            value={exp.startDate}
+                            className="h-8 text-sm"
                             onChange={e => { const n = [...profile.experience]; n[i].startDate = e.target.value; setProfile({ ...profile, experience: n }); }} />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">End Date</Label>
-                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={exp.endDate} disabled={exp.current} className="h-8 text-sm"
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="\d{4}-\d{2}"
+                            placeholder="YYYY-MM"
+                            value={exp.endDate}
+                            disabled={exp.current}
+                            className="h-8 text-sm"
                             onChange={e => { const n = [...profile.experience]; n[i].endDate = e.target.value; setProfile({ ...profile, experience: n }); }} />
                         </div>
                         <div className="flex items-center gap-2">
@@ -930,7 +889,7 @@ export default function ProfilePage() {
                           <Label htmlFor={`cur-${i}`} className="text-xs">Current Role</Label>
                         </div>
                       </div>
-                      <MarkdownEditor label="Description" value={exp.description} maxLength={1000}
+                      <MarkdownEditor label="Description" value={exp.description ?? ''} maxLength={1000}
                         onChange={v => { const n = [...profile.experience]; n[i].description = v; setProfile({ ...profile, experience: n }); }}
                         placeholder="Describe your responsibilities and achievements..." />
                     </CardContent>
@@ -944,7 +903,7 @@ export default function ProfilePage() {
                   <span className="text-sm font-semibold">Education</span>
                   <Button onClick={handleAddEducation} variant="outline" size="sm" className="h-8 gap-1 rounded-xl text-xs"><Plus className="h-3.5 w-3.5" />Add</Button>
                 </div>
-                {profile.education.length === 0 ? (
+                {(profile.education?.length ?? 0) === 0 ? (
                   <Card className="rounded-2xl border-0 shadow-sm">
                     <CardContent className="py-10 flex flex-col items-center text-center gap-2">
                       <GraduationCap className="h-10 w-10 text-muted-foreground/40" />
@@ -952,7 +911,7 @@ export default function ProfilePage() {
                       <Button onClick={handleAddEducation} variant="outline" size="sm" className="rounded-xl mt-1"><Plus className="h-3 w-3 mr-1" />Add Education</Button>
                     </CardContent>
                   </Card>
-                ) : profile.education.map((edu, i) => (
+                ) : profile.education?.map((edu, i) => (
                   <Card key={i} className="rounded-2xl border-0 shadow-sm">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center justify-between">
@@ -973,12 +932,25 @@ export default function ProfilePage() {
                         ))}
                         <div className="space-y-1">
                           <Label className="text-xs">Start Date</Label>
-                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={edu.startDate} className="h-8 text-sm"
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="\d{4}-\d{2}"
+                            placeholder="YYYY-MM"
+                            value={edu.startDate}
+                            className="h-8 text-sm"
                             onChange={e => { const n = [...profile.education]; n[i].startDate = e.target.value; setProfile({ ...profile, education: n }); }} />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">End Date</Label>
-                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={edu.endDate} disabled={edu.current} className="h-8 text-sm"
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="\d{4}-\d{2}"
+                            placeholder="YYYY-MM"
+                            value={edu.endDate}
+                            disabled={edu.current}
+                            className="h-8 text-sm"
                             onChange={e => { const n = [...profile.education]; n[i].endDate = e.target.value; setProfile({ ...profile, education: n }); }} />
                         </div>
                         <div className="flex items-center gap-2">
@@ -994,13 +966,12 @@ export default function ProfilePage() {
               </TabsContent>
 
               {/* ── Projects tab ── */}
-                {/* ── Projects tab ── */}
               <TabsContent value="projects" className="space-y-3 mt-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">Projects</span>
                   <Button onClick={handleAddProject} variant="outline" size="sm" className="h-8 gap-1 rounded-xl text-xs"><Plus className="h-3.5 w-3.5" />Add</Button>
                 </div>
-                {profile.projects.length === 0 ? (
+                {(profile.projects?.length ?? 0) === 0 ? (
                   <Card className="rounded-2xl border-0 shadow-sm">
                     <CardContent className="py-10 flex flex-col items-center text-center gap-2">
                       <Award className="h-10 w-10 text-muted-foreground/40" />
@@ -1008,7 +979,7 @@ export default function ProfilePage() {
                       <Button onClick={handleAddProject} variant="outline" size="sm" className="rounded-xl mt-1"><Plus className="h-3 w-3 mr-1" />Add Project</Button>
                     </CardContent>
                   </Card>
-                ) : profile.projects.map((project, i) => (
+                ) : profile.projects?.map((project, i) => (
                   <Card key={i} className="rounded-2xl border-0 shadow-sm">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center justify-between">
@@ -1028,12 +999,25 @@ export default function ProfilePage() {
                         ))}
                         <div className="space-y-1">
                           <Label className="text-xs">Start Date</Label>
-                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={project.startDate} className="h-8 text-sm"
-                             onChange={e => { const n = [...profile.projects]; n[i].startDate = e.target.value; setProfile({ ...profile, projects: n }); }} />
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="\d{4}-\d{2}"
+                            placeholder="YYYY-MM"
+                            value={project.startDate}
+                            className="h-8 text-sm"
+                            onChange={e => { const n = [...profile.projects]; n[i].startDate = e.target.value; setProfile({ ...profile, projects: n }); }} />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">End Date</Label>
-                          <Input type="text" inputMode="numeric" pattern="\d{4}-\d{2}" placeholder="YYYY-MM" value={project.endDate} disabled={project.current} className="h-8 text-sm"
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="\d{4}-\d{2}"
+                            placeholder="YYYY-MM"
+                            value={project.endDate}
+                            disabled={project.current}
+                            className="h-8 text-sm"
                             onChange={e => { const n = [...profile.projects]; n[i].endDate = e.target.value; setProfile({ ...profile, projects: n }); }} />
                         </div>
                         <div className="flex items-center gap-2 sm:col-span-2">
@@ -1045,15 +1029,15 @@ export default function ProfilePage() {
                       </div>
 
                       <div className="space-y-1">
-                        <Label className="text-xs">Description <span className="text-muted-foreground">({project.description?.length || 0}/1000)</span></Label>
-                        <Textarea value={project.description} placeholder="Describe your project..." rows={3} maxLength={1000} className="text-sm resize-none"
+                        <Label className="text-xs">Description <span className="text-muted-foreground">({project.description?.length ?? 0}/1000)</span></Label>
+                        <Textarea value={project.description ?? ''} placeholder="Describe your project..." rows={3} maxLength={1000} className="text-sm resize-none"
                           onChange={e => { if (e.target.value.length <= 1000) { const n = [...profile.projects]; n[i].description = e.target.value; setProfile({ ...profile, projects: n }); } }} />
                       </div>
 
                       <div className="space-y-1">
                         <Label className="text-xs">Project URL</Label>
                         <div className="flex gap-2">
-                          <Input type="url" value={project.url} placeholder="https://project.com" className="h-8 text-sm"
+                          <Input type="url" value={project.url ?? ''} placeholder="https://project.com" className="h-8 text-sm"
                             onChange={e => { const n = [...profile.projects]; n[i].url = e.target.value; setProfile({ ...profile, projects: n }); }} />
                           {project.url && (
                             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => window.open(project.url, '_blank')}><Globe className="h-3.5 w-3.5" /></Button>
@@ -1082,7 +1066,7 @@ export default function ProfilePage() {
 
                       <div className="space-y-1">
                         <Label className="text-xs">Collaborators</Label>
-                        <Input value={project.collaborators} placeholder="e.g. John Doe, Jane Smith" className="h-8 text-sm"
+                        <Input value={project.collaborators ?? ''} placeholder="e.g. John Doe, Jane Smith" className="h-8 text-sm"
                           onChange={e => { const n = [...profile.projects]; n[i].collaborators = e.target.value; setProfile({ ...profile, projects: n }); }} />
                       </div>
                     </CardContent>
@@ -1097,7 +1081,7 @@ export default function ProfilePage() {
                   <CardContent className="space-y-4">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Remote Preference</Label>
-                      <Select value={profile.preferences.remotePreference}
+                      <Select value={profile.preferences?.remotePreference ?? 'any'}
                         onValueChange={v => setProfile({ ...profile, preferences: { ...profile.preferences, remotePreference: v } })}>
                         <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -1109,8 +1093,8 @@ export default function ProfilePage() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { label: 'Min Salary', key: 'min', value: profile.preferences.salaryExpectation.min },
-                        { label: 'Max Salary', key: 'max', value: profile.preferences.salaryExpectation.max },
+                        { label: 'Min Salary', key: 'min', value: profile.preferences?.salaryExpectation?.min ?? 0 },
+                        { label: 'Max Salary', key: 'max', value: profile.preferences?.salaryExpectation?.max ?? 0 },
                       ].map(f => (
                         <div key={f.key} className="space-y-1">
                           <Label className="text-xs">{f.label}</Label>
@@ -1121,7 +1105,7 @@ export default function ProfilePage() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Availability</Label>
-                      <Input value={profile.preferences.availability} placeholder="Immediate / 2 weeks notice" className="h-9 text-sm"
+                      <Input value={profile.preferences?.availability ?? ''} placeholder="Immediate / 2 weeks notice" className="h-9 text-sm"
                         onChange={e => setProfile({ ...profile, preferences: { ...profile.preferences, availability: e.target.value } })} />
                     </div>
                   </CardContent>
@@ -1134,10 +1118,10 @@ export default function ProfilePage() {
                   <CardHeader className="pb-2"><CardTitle className="text-sm">Social Links</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
                     {[
-                      { id: 'linkedin', label: 'LinkedIn', icon: <Linkedin className="h-3.5 w-3.5 text-blue-600" />, value: profile.social.linkedin, ph: 'https://linkedin.com/in/username', key: 'linkedin' },
-                      { id: 'github', label: 'GitHub', icon: <Github className="h-3.5 w-3.5" />, value: profile.social.github, ph: 'https://github.com/username', key: 'github' },
-                      { id: 'portfolio', label: 'Portfolio', icon: <Globe className="h-3.5 w-3.5 text-blue-600" />, value: profile.social.portfolio, ph: 'https://yourportfolio.com', key: 'portfolio' },
-                      { id: 'twitter', label: 'Twitter/X', icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>, value: profile.social.twitter, ph: 'https://twitter.com/username', key: 'twitter' },
+                      { id: 'linkedin', label: 'LinkedIn', icon: <Linkedin className="h-3.5 w-3.5 text-blue-600" />, value: profile.social?.linkedin ?? '', ph: 'https://linkedin.com/in/username', key: 'linkedin' },
+                      { id: 'github', label: 'GitHub', icon: <Github className="h-3.5 w-3.5" />, value: profile.social?.github ?? '', ph: 'https://github.com/username', key: 'github' },
+                      { id: 'portfolio', label: 'Portfolio', icon: <Globe className="h-3.5 w-3.5 text-blue-600" />, value: profile.social?.portfolio ?? '', ph: 'https://yourportfolio.com', key: 'portfolio' },
+                      { id: 'twitter', label: 'Twitter/X', icon: <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>, value: profile.social?.twitter ?? '', ph: 'https://twitter.com/username', key: 'twitter' },
                     ].map(f => (
                       <div key={f.id} className="space-y-1.5">
                         <Label htmlFor={f.id} className="text-xs flex items-center gap-1.5">{f.icon}{f.label}</Label>
@@ -1153,9 +1137,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* ── Sticky bottom bar (edit mode) ── */}
       {!showProfileCard && !loading && (
-        // 🎨 Bottom bar background: bg-background/95 backdrop-blur → tweak opacity here
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur border-t px-4 py-3"
           style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
           <div className="max-w-lg mx-auto flex gap-3">
