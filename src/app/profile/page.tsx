@@ -189,10 +189,19 @@ function ProfileHero({
 /** Instagram‑style stats row */
 function ProfileStats({ profile }: { profile: ProfileData }) {
   const stats = [
-    { value: profile.experience.length, label: 'Roles' },
-    { value: profile.skills.length, label: 'Skills' },
-    { value: profile.projects.length, label: 'Projects' },
-    { value: profile.education.length, label: 'Education' },
+    { value: profile.experience?.length ?? 0, label: 'Roles' },
+    { value: profile.skills?.length ?? 0, label: 'Skills' },
+    { value: profile.projects?.length ?? 0, label: 'Projects' },
+    { value: profile.education?.length ?? 0, label: 'Education' },
+    { value: profile.preferences?.jobTypes?.length ?? 0, label: 'Job Types' },
+    { value: profile.preferences?.locations?.length ?? 0, label: 'Locations' },
+    { value: profile.preferences?.remotePreference ?? 0, label: 'Remote Preference' },
+    { value: profile.preferences?.salaryExpectation?.min ?? 0, label: 'Salary Expectation' },
+    { value: profile.preferences?.availability ?? 0, label: 'Availability' },
+    { value: profile.social?.linkedin ?? 0, label: 'LinkedIn' },
+    { value: profile.social?.github ?? 0, label: 'GitHub' },
+    { value: profile.social?.portfolio ?? 0, label: 'Portfolio' },
+    { value: profile.social?.twitter ?? 0, label: 'Twitter' },
   ];
 
   return (
@@ -632,10 +641,11 @@ export default function ProfilePage() {
           location: p.location || '',
           bio: p.bio || '',
           headline: p.headline || '',
-          skills: p.skills || [],
-          experience: p.experience || [],
-          education: p.education || [],
-          projects: p.projects || [],
+          skills: Array.isArray(p.skills) ? p.skills : [],
+          experience: Array.isArray(p.experience) ? p.experience : [],
+          education: Array.isArray(p.education) ? p.education : [],
+          projects: Array.isArray(p.projects) ? p.projects : [],
+          
           preferences: {
             jobTypes: p.preferences?.jobTypes || [],
             locations: p.preferences?.locations || [],
