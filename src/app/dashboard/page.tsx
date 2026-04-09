@@ -10,13 +10,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Briefcase, TrendingUp, CheckCircle, Clock, XCircle,
   MapPin, Building2, Loader2, ArrowRight, Sparkles,
-  RefreshCw, User, Calendar
+  RefreshCw, User, Calendar, Settings, LogOut, FileText, ChevronRight,
+  Check, X
 } from 'lucide-react';
 import CompanyLogo from '@/components/common/CompanyLogo';
+import { useJobSelection } from '@/contexts/JobSelectionContext';
+import { BulkApplyBar } from '@/components/jobs/BulkApplyBar';
 
 const RECOMMENDATIONS_CACHE_KEY = 'dashboard_recommendations';
 const CACHE_EXPIRATION_MS = 5 * 60 * 1000;
@@ -78,7 +83,10 @@ export default function DashboardPage() {
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('ai-matches');
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const { selectedJobs, selectedJobsData, toggleJobSelection, clearSelection } = useJobSelection();
 
   const hasFetchedRecommendations = useRef(false);
   const scrollRestoreKey = 'dashboard_scroll_position';
@@ -219,17 +227,17 @@ export default function DashboardPage() {
   const todayCount = recentApplications.filter(app => isToday(app.createdAt)).length;
 
   const matchBadgeClass = (score: number) => {
-    if (score >= 70) return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-    if (score >= 55) return 'bg-amber-50 text-amber-700 border border-amber-200';
-    return 'bg-slate-100 text-slate-600 border border-slate-200';
+    if (score >= 70) return 'bg-black text-white border border-black';
+    if (score >= 55) return 'bg-gray-200 text-gray-800 border border-gray-300';
+    return 'bg-gray-100 text-gray-600 border border-gray-200';
   };
 
   const statusBadgeClass = (status: string) => {
     const map: Record<string, string> = {
-      Applied: 'bg-amber-50 text-amber-700 border border-amber-200',
-      Interview: 'bg-blue-50 text-blue-700 border border-blue-200',
-      Offer: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-      Rejected: 'bg-red-50 text-red-600 border border-red-200',
+      Applied: 'bg-blue-100 text-blue-700 border border-blue-200',
+      Interview: 'bg-violet-100 text-violet-700 border border-violet-200',
+      Offer: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+      Rejected: 'bg-red-100 text-red-600 border border-red-200',
     };
     return map[status] ?? map.Applied;
   };
@@ -239,7 +247,7 @@ export default function DashboardPage() {
       <div className="min-h-screen bg-[#f2f2f7]">
         <Header />
         <div className="flex flex-col items-center justify-center py-32 gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-200">
+          <div className="w-12 h-12 rounded-2xl bg-black flex items-center justify-center shadow-lg shadow-black/20">
             <Loader2 className="h-6 w-6 animate-spin text-white" />
           </div>
           <p className="text-[15px] text-slate-500 font-medium">Setting up your dashboard…</p>
@@ -257,6 +265,96 @@ export default function DashboardPage() {
       <Header />
 
       {/* ─────────────────────────────────────────
+          Profile / Navigation Sheet
+      ───────────────────────────────────────── */}
+      <Sheet open={profileSheetOpen} onOpenChange={setProfileSheetOpen}>
+        <SheetContent side="right" className="w-[300px] sm:w-80 p-0 border-0 overflow-hidden rounded-l-3xl">
+          {/* Glassmorphic top gradient */}
+          <div
+            className="px-6 pt-10 pb-7"
+            style={{
+              background: 'linear-gradient(145deg, #111111 0%, #1a1a1a 60%, #222222 100%)',
+            }}
+          >
+            <div className="flex items-center gap-4">
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center border"
+                style={{
+                  background: 'rgba(255,255,255,0.18)',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  borderColor: 'rgba(255,255,255,0.3)',
+                }}
+              >
+                <span className="text-[26px] font-bold text-white leading-none">
+                  {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-white font-bold text-[17px] leading-tight truncate">{user?.name}</p>
+                <p className="text-gray-400 text-[12px] mt-0.5 truncate">{user?.email}</p>
+                {user?.phone && <p className="text-gray-400 text-[12px]">{user.phone}</p>}
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4 flex-wrap">
+              {user?.roles?.map(role => (
+                <span
+                  key={role}
+                  className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                  style={{ background: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.95)', border: '1px solid rgba(255,255,255,0.3)' }}
+                >
+                  {role}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Nav Items */}
+          <nav className="px-3 py-3 space-y-0.5">
+            {[
+              { icon: User, label: 'My Profile', href: '/profile', color: 'text-gray-900', bg: 'bg-gray-100' },
+              { icon: Briefcase, label: 'My Applications', href: '/applications', color: 'text-gray-900', bg: 'bg-gray-100' },
+              { icon: FileText, label: 'Resume', href: '/profile#resume', color: 'text-gray-900', bg: 'bg-gray-100' },
+              { icon: Settings, label: 'Settings', href: '/settings', color: 'text-gray-900', bg: 'bg-gray-100' },
+            ].map(({ icon: Icon, label, href, color, bg }) => (
+              <Link
+                key={label}
+                href={href}
+                onClick={() => setProfileSheetOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
+                  <Icon className={`h-4 w-4 ${color}`} />
+                </div>
+                <span className="text-[15px] font-medium text-slate-800 flex-1">{label}</span>
+                <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-400 transition-colors" />
+              </Link>
+            ))}
+          </nav>
+
+          <div className="mx-4">
+            <Separator />
+          </div>
+
+          <div className="px-3 py-3">
+            <button
+              className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-gray-100 transition-colors w-full text-left group"
+              onClick={() => { setProfileSheetOpen(false); router.push('/auth/logout'); }}
+            >
+              <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 group-hover:bg-gray-200 transition-colors">
+                <LogOut className="h-4 w-4 text-gray-700" />
+              </div>
+              <span className="text-[15px] font-medium text-gray-700 flex-1">Sign Out</span>
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-400 text-center pb-6 pt-2">
+            Member since {new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+          </p>
+        </SheetContent>
+      </Sheet>
+
+      {/* ─────────────────────────────────────────
           Page Content
       ───────────────────────────────────────── */}
       <div className="container mx-auto px-4 max-w-2xl pt-5 pb-28 md:pb-10 space-y-4">
@@ -272,13 +370,13 @@ export default function DashboardPage() {
           {/* Decorative orbs */}
           <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
           <div className="absolute -bottom-8 -left-8 w-36 h-36 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-          <div className="absolute top-1/2 right-8 w-20 h-20 rounded-full bg-blue-300/20 blur-xl pointer-events-none" />
+          <div className="absolute top-1/2 right-8 w-20 h-20 rounded-full bg-white/5 blur-xl pointer-events-none" />
 
           <div className="relative z-10">
             {/* Name row + avatar */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-blue-200 text-[12px] font-semibold uppercase tracking-widest mb-1">Welcome back</p>
+                <p className="text-gray-400 text-[12px] font-semibold uppercase tracking-widest mb-1">Welcome back</p>
                 <h1 className="text-white text-[24px] font-extrabold leading-tight tracking-tight">
                   {user?.name} ✨
                 </h1>
@@ -300,7 +398,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Email */}
-            <p className="text-blue-200 text-[13px] mt-1 truncate">{user?.email}</p>
+            <p className="text-gray-400 text-[13px] mt-1 truncate">{user?.email}</p>
 
             {/* ── Stats pills ── */}
             <div className="mt-5 grid grid-cols-3 gap-2.5">
@@ -319,12 +417,12 @@ export default function DashboardPage() {
                     border: '1px solid rgba(255,255,255,0.22)',
                   }}
                 >
-                  <Icon className="h-4 w-4 text-blue-200 mb-2.5" />
+                  <Icon className="h-4 w-4 text-gray-400 mb-2.5" />
                   {statsLoading
                     ? <Skeleton className="h-7 w-8 bg-white/25 rounded-lg mb-1" />
                     : <p className="text-white text-[26px] font-extrabold leading-none tabular-nums">{value}</p>
                   }
-                  <p className="text-blue-200 text-[11px] font-semibold mt-2 leading-tight">{label}</p>
+                  <p className="text-gray-400 text-[11px] font-semibold mt-2 leading-tight">{label}</p>
                 </div>
               ))}
             </div>
@@ -347,6 +445,59 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* ── Selected Jobs Banner ── */}
+        {selectedJobs.size > 0 && (
+          <div className="rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-black flex items-center justify-center">
+                  <span className="text-white text-[10px] font-black leading-none">{selectedJobs.size}</span>
+                </div>
+                <span className="text-[13px] font-bold text-gray-900">
+                  {selectedJobs.size} job{selectedJobs.size > 1 ? 's' : ''} selected for apply
+                </span>
+              </div>
+              <button
+                onClick={clearSelection}
+                className="text-[12px] font-semibold text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                Clear all
+              </button>
+            </div>
+            {/* Job list */}
+            <div className="divide-y divide-gray-50">
+              {Array.from(selectedJobsData.values()).map(job => (
+                <div key={job._id} className="flex items-center gap-3 px-4 py-3">
+                  <CompanyLogo
+                    name={job.company}
+                    logoUrl={job.logoUrl}
+                    domain={job.companyDomain || job.url}
+                    size={32}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-gray-900 truncate">{job.title}</p>
+                    <p className="text-[11px] text-gray-500 truncate">{job.company} · {job.location}</p>
+                  </div>
+                  <button
+                    onClick={() => toggleJobSelection(job._id)}
+                    className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-100 transition-colors flex-shrink-0"
+                    aria-label="Remove job"
+                  >
+                    <X className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {/* Footer hint */}
+            <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100">
+              <p className="text-[11px] text-gray-400 font-medium">
+                Tap "One-Click Apply to All" at the bottom to start applying
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── Tabs ── */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           {/* Tab switcher — glassmorphic pill */}
@@ -362,26 +513,26 @@ export default function DashboardPage() {
           >
             <TabsTrigger
               value="ai-matches"
-              className="rounded-xl text-[12px] font-bold gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-700 transition-all"
+              className="rounded-xl text-[12px] font-bold gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-black transition-all"
             >
               <Sparkles className="h-3.5 w-3.5 shrink-0" />
               AI Matches
             </TabsTrigger>
             <TabsTrigger
               value="recent-applications"
-              className="rounded-xl text-[12px] font-bold gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-700 transition-all"
+              className="rounded-xl text-[12px] font-bold gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-black transition-all"
             >
               <Clock className="h-3.5 w-3.5 shrink-0" />
               Recent
               {recentApplications.length > 0 && (
-                <span className="min-w-[16px] h-4 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center px-1 leading-none">
+                <span className="min-w-[16px] h-4 rounded-full bg-black text-white text-[9px] font-black flex items-center justify-center px-1 leading-none">
                   {recentApplications.length}
                 </span>
               )}
             </TabsTrigger>
             <TabsTrigger
               value="all-applications"
-              className="rounded-xl text-[12px] font-bold gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-700 transition-all"
+              className="rounded-xl text-[12px] font-bold gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-black transition-all"
             >
               <Briefcase className="h-3.5 w-3.5 shrink-0" />
               All Apps
@@ -401,7 +552,7 @@ export default function DashboardPage() {
               <button
                 onClick={handleRefreshRecommendations}
                 disabled={refreshing}
-                className="flex items-center gap-1.5 text-[13px] font-bold text-blue-600 px-3 py-2 rounded-xl hover:bg-blue-50 active:bg-blue-100 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 text-[13px] font-bold text-black px-3 py-2 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
                 {refreshing ? 'Refreshing…' : 'Refresh'}
@@ -454,10 +605,18 @@ export default function DashboardPage() {
             ) : (
               <div key={refreshKey} className="space-y-3">
                 {recommendations.map((job) => (
-                  <Link
+                  <div
                     key={job._id}
+                    className={`relative rounded-2xl transition-all ${selectedJobs.has(job._id) ? 'ring-2 ring-black' : ''}`}
+                  >
+                    {selectedJobs.has(job._id) && (
+                      <div className="absolute top-3 right-3 z-10 w-5 h-5 bg-black rounded-full flex items-center justify-center pointer-events-none">
+                        <Check className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                  <Link
                     href={`/jobs/${job._id}?from=dashboard`}
-                    className="block bg-white rounded-2xl p-4 border border-white/80 shadow-sm hover:shadow-md hover:border-blue-100 transition-all active:scale-[0.99] duration-150"
+                    className="block bg-white rounded-2xl p-4 border border-white/80 shadow-sm hover:shadow-md hover:border-gray-200 transition-all active:scale-[0.99] duration-150"
                     style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}
                   >
                     {/* Title + Match */}
@@ -504,16 +663,17 @@ export default function DashboardPage() {
                           : <span className="text-slate-400 font-normal">Salary not listed</span>
                         }
                       </span>
-                      <span className="text-[12px] font-bold text-blue-600 flex items-center gap-1">
+                      <span className="text-[12px] font-bold text-black flex items-center gap-1">
                         Quick Apply <ArrowRight className="h-3.5 w-3.5" />
                       </span>
                     </div>
                   </Link>
+                  </div>
                 ))}
 
                 <Link
                   href="/"
-                  className="flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold text-blue-600 bg-white border border-slate-100 hover:border-blue-200 hover:bg-blue-50/60 transition-all shadow-sm"
+                  className="flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold text-black bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm"
                 >
                   Browse All Jobs <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -533,7 +693,7 @@ export default function DashboardPage() {
               <button
                 onClick={() => { setApplicationsLoading(true); fetchDashboard(); }}
                 disabled={applicationsLoading}
-                className="flex items-center gap-1.5 text-[13px] font-bold text-blue-600 px-3 py-2 rounded-xl hover:bg-blue-50 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 text-[13px] font-bold text-black px-3 py-2 rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${applicationsLoading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -581,7 +741,7 @@ export default function DashboardPage() {
                       <Link
                         key={application._id}
                         href={`/jobs/${jobId}?from=dashboard`}
-                        className="block bg-white rounded-2xl p-4 border border-white/80 shadow-sm hover:shadow-md hover:border-blue-100 transition-all active:scale-[0.99] duration-150"
+                        className="block bg-white rounded-2xl p-4 border border-white/80 shadow-sm hover:shadow-md hover:border-gray-200 transition-all active:scale-[0.99] duration-150"
                         style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}
                       >
                         <div className="flex items-start justify-between gap-3 mb-2.5">
@@ -607,7 +767,7 @@ export default function DashboardPage() {
                             <Calendar className="h-3 w-3" />
                             {isToday(appliedDate) ? 'Applied today' : `Applied ${appliedDate.toLocaleDateString()}`}
                           </span>
-                          <span className="text-[12px] font-bold text-blue-600 flex items-center gap-1">
+                          <span className="text-[12px] font-bold text-black flex items-center gap-1">
                             View Status <ArrowRight className="h-3.5 w-3.5" />
                           </span>
                         </div>
@@ -618,7 +778,7 @@ export default function DashboardPage() {
                 {recentApplications.length > 5 && (
                   <button
                     onClick={() => setShowAllApplications(!showAllApplications)}
-                    className="w-full py-3.5 rounded-2xl text-[14px] font-bold text-blue-600 bg-white border border-slate-100 hover:border-blue-200 hover:bg-blue-50/60 transition-all shadow-sm flex items-center justify-center gap-2"
+                    className="w-full py-3.5 rounded-2xl text-[14px] font-bold text-black bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm flex items-center justify-center gap-2"
                   >
                     {showAllApplications ? 'Show Less' : `Show All ${recentApplications.length} Applications`}
                     <ArrowRight className={`h-4 w-4 transition-transform ${showAllApplications ? 'rotate-90' : '-rotate-90'}`} />
@@ -646,10 +806,10 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Total', value: stats.totalApplications, icon: Briefcase, iconColor: 'text-slate-600', bg: 'bg-slate-50', numColor: 'text-slate-900', sub: 'All time' },
-                { label: 'Pending', value: stats.pendingApplications, icon: Clock, iconColor: 'text-amber-500', bg: 'bg-amber-50', numColor: 'text-amber-600', sub: 'Awaiting reply' },
-                { label: 'Accepted', value: stats.acceptedApplications, icon: CheckCircle, iconColor: 'text-emerald-600', bg: 'bg-emerald-50', numColor: 'text-emerald-600', sub: 'Successful' },
-                { label: 'Rejected', value: stats.rejectedApplications, icon: XCircle, iconColor: 'text-red-500', bg: 'bg-red-50', numColor: 'text-red-500', sub: 'Keep going!' },
+                { label: 'Total', value: stats.totalApplications, icon: Briefcase, iconColor: 'text-blue-500', bg: 'bg-blue-50', numColor: 'text-blue-900', sub: 'All time' },
+                { label: 'Pending', value: stats.pendingApplications, icon: Clock, iconColor: 'text-amber-500', bg: 'bg-amber-50', numColor: 'text-amber-800', sub: 'Awaiting reply' },
+                { label: 'Accepted', value: stats.acceptedApplications, icon: CheckCircle, iconColor: 'text-emerald-600', bg: 'bg-emerald-50', numColor: 'text-emerald-700', sub: 'Successful' },
+                { label: 'Rejected', value: stats.rejectedApplications, icon: XCircle, iconColor: 'text-red-400', bg: 'bg-red-50', numColor: 'text-red-600', sub: 'Keep going!' },
               ].map(({ label, value, icon: Icon, iconColor, bg, numColor, sub }) => (
                 <div
                   key={label}
@@ -670,7 +830,7 @@ export default function DashboardPage() {
 
             <Link
               href="/applications"
-              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold text-blue-600 bg-white border border-slate-100 hover:border-blue-200 hover:bg-blue-50/60 transition-all shadow-sm"
+              className="flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold text-black bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm"
             >
               View Full History <ArrowRight className="h-4 w-4" />
             </Link>
@@ -682,9 +842,9 @@ export default function DashboardPage() {
           <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-3 px-1">Quick Actions</p>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { icon: TrendingUp, label: 'Search Jobs', href: '/', iconColor: 'text-blue-600', bg: 'bg-blue-50' },
-              { icon: Briefcase, label: 'Applications', href: '/applications', iconColor: 'text-violet-600', bg: 'bg-violet-50' },
-              { icon: User, label: 'My Profile', href: '/profile', iconColor: 'text-emerald-600', bg: 'bg-emerald-50' },
+              { icon: TrendingUp, label: 'Search Jobs', href: '/', iconColor: 'text-black', bg: 'bg-gray-100' },
+              { icon: Briefcase, label: 'Applications', href: '/applications', iconColor: 'text-black', bg: 'bg-gray-100' },
+              { icon: User, label: 'My Profile', href: '/profile', iconColor: 'text-black', bg: 'bg-gray-100' },
             ].map(({ icon: Icon, label, href, iconColor, bg }) => (
               <Link
                 key={label}
@@ -702,23 +862,27 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Mobile Sticky CTA ── */}
-      <div
-        className="fixed bottom-0 left-0 right-0 md:hidden z-30 px-4 pb-6 pt-4"
-        style={{ background: 'linear-gradient(to top, #f2f2f7 65%, rgba(242,242,247,0))' }}
-      >
-        <Link
-          href="/"
-          className="flex items-center justify-center gap-2 w-full h-13 py-3.5 rounded-2xl text-[15px] font-extrabold text-white transition-all active:scale-[0.98] duration-100"
-          style={{
-            background: 'linear-gradient(135deg, #1d4ed8, #2563eb)',
-            boxShadow: '0 6px 24px rgba(37,99,235,0.35)',
-          }}
+      {/* ── Mobile Sticky CTA (hidden when jobs are selected to avoid bar conflict) ── */}
+      {selectedJobs.size === 0 && (
+        <div
+          className="fixed bottom-0 left-0 right-0 md:hidden z-30 px-4 pb-6 pt-4"
+          style={{ background: 'linear-gradient(to top, #f2f2f7 65%, rgba(242,242,247,0))' }}
         >
-          Browse All Jobs
-          <ArrowRight className="h-5 w-5" />
-        </Link>
-      </div>
+          <Link
+            href="/"
+            className="flex items-center justify-center gap-2 w-full h-13 py-3.5 rounded-2xl text-[15px] font-extrabold text-white transition-all active:scale-[0.98] duration-100 bg-black"
+            style={{
+              boxShadow: '0 6px 24px rgba(0,0,0,0.25)',
+            }}
+          >
+            Browse All Jobs
+            <ArrowRight className="h-5 w-5" />
+          </Link>
+        </div>
+      )}
+
+      {/* ── BulkApplyBar — manages selected jobs apply workflow ── */}
+      <BulkApplyBar jobs={Array.from(selectedJobsData.values())} />
     </div>
   );
 }

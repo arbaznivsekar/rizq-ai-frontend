@@ -691,6 +691,8 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
     
     // Case 2: Some successful applications
     if (successful > 0) {
+      // Bust the recommendations cache so dashboard re-fetches without applied jobs
+      try { localStorage.removeItem('dashboard_recommendations'); } catch (_) {}
       toast.success(`Successfully Applied!`, {
         description: `${successful} application${successful > 1 ? 's' : ''} sent successfully${failed > 0 ? `, ${failed} failed` : ''}${skipped && skipped > 0 ? `, ${skipped} skipped (already applied)` : ''}.`,
         duration: 5000,
