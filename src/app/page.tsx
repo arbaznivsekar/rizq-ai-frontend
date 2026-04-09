@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { searchJobs, checkApplicationEligibility } from '@/lib/api';
@@ -12,7 +12,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Header } from '@/components/layout/Header';
 import { BulkApplyBar } from '@/components/jobs/BulkApplyBar';
 import { JobListingCard } from '@/components/jobs/JobListingCard';
-import { Search, Loader2, MapPin } from 'lucide-react';
+import { Search, Loader2, MapPin, X } from 'lucide-react';
+import Fuse from 'fuse.js';
+import type { FuseResult } from 'fuse.js';
 
 interface Job {
   _id: string;
@@ -44,6 +46,7 @@ function HomePageContent() {
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [displayedJobs, setDisplayedJobs] = useState<Job[]>([]);
   const [applicationStatus, setApplicationStatus] = useState<ApplicationStatus>({});
   const [checkingEligibility, setCheckingEligibility] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -54,6 +57,10 @@ function HomePageContent() {
   const [error, setError] = useState('');
 
   const JOBS_PER_PAGE = 20;
+
+  // ── Search-enhancement refs ───────────────────────────────────────────────
+  const lastBackendSearch = useRef({ query: '', location: '' });
+  const fuseRef = useRef<Fuse<Job> | null>(null);
 
   // Ensure we never render duplicate jobs (prevents duplicate React keys)
   const dedupeJobs = (list: Job[]): Job[] => {
@@ -221,6 +228,7 @@ function HomePageContent() {
 
   // Handle search with pagination restoration
   const handleSearchWithPagination = async (paginationState: any) => {
+    lastBackendSearch.current = { query: paginationState.query, location: paginationState.location };
     setLoading(true);
     setError('');
     
@@ -392,6 +400,7 @@ function HomePageContent() {
   }, [jobs, loading, loadingMore, offset]);
 
   const handleSearch = async (resetOffset = true) => {
+    lastBackendSearch.current = { query, location };
     setLoading(true);
     setError('');
     const searchOffset = resetOffset ? 0 : offset;
@@ -455,6 +464,7 @@ function HomePageContent() {
 
   // Handle search with specific query and location (for URL parameter navigation)
   const handleSearchWithQueryAndLocation = async (searchQuery: string, searchLocation: string, resetOffset = true) => {
+    lastBackendSearch.current = { query: searchQuery, location: searchLocation };
     setLoading(true);
     setError('');
     const searchOffset = resetOffset ? 0 : offset;
@@ -526,7 +536,46 @@ function HomePageContent() {
     }
   };
 
-  
+  // ── Fuse.js: rebuild search index whenever backend results change ─────────
+  useEffect(() => {
+    fuseRef.current = new Fuse(jobs, {
+      keys: [
+        { name: 'title', weight: 0.4 },
+        { name: 'company', weight: 0.25 },
+        { name: 'description', weight: 0.15 },
+        { name: 'location', weight: 0.1 },
+        { name: 'requirements', weight: 0.1 },
+      ],
+      threshold: 0.35,       // 0 = exact, 1 = match anything
+      includeScore: true,
+      ignoreLocation: true,  // match anywhere in the string
+      minMatchCharLength: 2,
+      useExtendedSearch: false,
+    });
+  }, [jobs]);
+
+  // ── Fuse.js: client-side instant filter on loaded jobs ───────────────────
+  useEffect(() => {
+    if (!query.trim() || !fuseRef.current) {
+      setDisplayedJobs(jobs);
+      return;
+    }
+    const results = fuseRef.current.search(query);
+    setDisplayedJobs(results.map((r: FuseResult<Job>) => r.item));
+  }, [jobs, query]);
+
+  // ── Debounced backend search: auto-fires 400 ms after user stops typing ──
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const { query: lq, location: ll } = lastBackendSearch.current;
+      // Only hit the backend if the values actually changed
+      if (query !== lq || location !== ll) {
+        handleSearch(true);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, location]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -539,38 +588,68 @@ function HomePageContent() {
           <CardHeader className="pb-3 px-4 pt-4 md:px-6 md:pt-6 md:pb-6">
             <CardTitle className="text-lg md:text-2xl">Search Jobs</CardTitle>
             <CardDescription className="text-xs md:text-base">
-              {total > 0 ? `Showing ${jobs.length} of ${total} jobs` : 'Find your next opportunity'}
+              {total > 0
+                ? query.trim() && displayedJobs.length !== jobs.length
+                  ? `${displayedJobs.length} matches · ${total} total`
+                  : `Showing ${jobs.length} of ${total} jobs`
+                : 'Find your next opportunity'}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-4 pb-4 pt-0 md:px-6 md:pb-6">
             <div className="flex flex-col gap-2.5 md:gap-4">
               <div className="flex flex-col sm:flex-row gap-2.5 md:gap-4">
+                {/* Query input with clear button */}
                 <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-slate-400 pointer-events-none" />
                   <Input
-                    placeholder="Job title, keywords, or company..."
+                    placeholder="Title, company, skills, or keywords…"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    className="pl-9 md:pl-10 h-11 md:h-12 text-sm md:text-base"
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch(true)}
+                    className="pl-9 md:pl-10 pr-8 h-11 md:h-12 text-sm md:text-base"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch(true)}
                   />
+                  {query && (
+                    <button
+                      type="button"
+                      onClick={() => setQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      aria-label="Clear search"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
+                {/* Location input with clear button */}
                 <div className="flex-1 relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-slate-400" />
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-slate-400 pointer-events-none" />
                   <Input
-                    placeholder="Location (optional)"
+                    placeholder="Location (city, remote…)"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="pl-9 md:pl-10 h-11 md:h-12 text-sm md:text-base"
-                    onKeyPress={(e) => e.key === 'Enter' && handleSearch(true)}
+                    className="pl-9 md:pl-10 pr-8 h-11 md:h-12 text-sm md:text-base"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch(true)}
                   />
+                  {location && (
+                    <button
+                      type="button"
+                      onClick={() => setLocation('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                      aria-label="Clear location"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
-              <Button onClick={() => handleSearch(true)} disabled={loading} className="h-11 md:h-12 text-sm md:text-base w-full sm:w-auto sm:self-start sm:px-8">
+              <Button
+                onClick={() => handleSearch(true)}
+                disabled={loading}
+                className="h-11 md:h-12 text-sm md:text-base w-full sm:w-auto sm:self-start sm:px-8"
+              >
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 md:h-5 md:w-5 animate-spin" />
-                    Searching...
+                    Searching…
                   </>
                 ) : (
                   <>
@@ -607,24 +686,12 @@ function HomePageContent() {
         )}
 
         {/* Job Results */}
-        {!loading && jobs.length > 0 && (
+        {!loading && displayedJobs.length > 0 && (
           <>
           <div className="mt-4 md:mt-8 space-y-3 md:space-y-4 mb-32 md:mb-10">
-            {jobs.map((job, index) => {
+            {displayedJobs.map((job) => {
               const jobStatus = applicationStatus[job._id];
               const isAlreadyApplied = jobStatus?.hasApplied && !jobStatus?.canReapply;
-              
-              // Debug logging for each job
-              if (index < 3) {  // Log first 3 jobs only to avoid spam
-                console.log(`📋 Rendering job ${job._id.substring(0, 8)}... (${job.title}):`, {
-                  jobStatus: jobStatus || 'NO STATUS',
-                  hasApplied: jobStatus?.hasApplied,
-                  canReapply: jobStatus?.canReapply,
-                  isDisabled: isAlreadyApplied,
-                  daysUntilReapply: jobStatus?.daysUntilReapply
-                });
-              }
-              
               return (
                 <JobListingCard
                   key={job._id}
@@ -642,18 +709,16 @@ function HomePageContent() {
                     url: job.url,
                   })}
                   onViewDetails={() => {
-                    // Save both job ID and pagination state
                     sessionStorage.setItem('lastViewedJobId', job._id);
                     savePaginationState();
-                    console.log('💾 Saved job ID and pagination state:', job._id);
                   }}
                 />
-              )
+              );
             })}
           </div>
 
-            {/* Load More Button */}
-            {hasMore && (
+            {/* Load More Button — only when not actively filtering client-side */}
+            {hasMore && !query.trim() && (
               <div className="mt-4 md:mt-8 flex justify-center px-1">
                 <Button
                   onClick={loadMore}
@@ -665,7 +730,7 @@ function HomePageContent() {
                   {loadingMore ? (
                     <>
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Loading more jobs...
+                      Loading more jobs…
                     </>
                   ) : (
                     <>
@@ -679,14 +744,16 @@ function HomePageContent() {
         )}
 
         {/* Empty State */}
-        {!loading && jobs.length === 0 && !error && (
+        {!loading && displayedJobs.length === 0 && !error && (
           <div className="mt-4 md:mt-8">
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-10 md:py-12 px-4">
                 <Search className="h-12 w-12 md:h-16 md:w-16 text-slate-300 mb-3 md:mb-4" />
                 <h3 className="text-lg md:text-xl font-semibold text-slate-700 mb-1 md:mb-2">No jobs found</h3>
                 <p className="text-slate-500 text-sm text-center max-w-xs">
-                  Try adjusting your search terms or removing the location filter
+                  {query.trim()
+                    ? `No matches for "${query}". Try different keywords or broaden your search.`
+                    : 'Try adjusting your search terms or removing the location filter.'}
                 </p>
               </CardContent>
             </Card>
