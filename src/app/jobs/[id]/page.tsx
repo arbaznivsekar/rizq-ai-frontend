@@ -217,7 +217,16 @@ export default function JobDetailsPage() {
               <div className="flex items-center gap-3">
                 <Checkbox
                   checked={selectedJobs.has(job._id)}
-                  onCheckedChange={() => toggleJobSelection(job._id)}
+                  onCheckedChange={() => toggleJobSelection(job._id, {
+                    _id: job._id,
+                    title: job.title,
+                    company: job.company,
+                    location: job.location,
+                    description: job.description,
+                    companyDomain: job.companyDomain,
+                    logoUrl: job.logoUrl,
+                    url: job.url,
+                  })}
                   className="h-5 w-5 flex-shrink-0"
                   disabled={applicationStatus?.hasApplied && !applicationStatus?.canReapply}
                 />

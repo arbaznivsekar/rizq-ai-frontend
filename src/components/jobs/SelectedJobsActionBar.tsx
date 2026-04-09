@@ -14,7 +14,7 @@ export function SelectedJobsActionBar({ selectedCount, onApply, onDismiss }: Pro
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center gap-3 px-4 py-3 min-w-0">
         <div className="flex items-center gap-2 text-sm text-gray-600 min-w-0">
-          <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-5 h-5 rounded-full bg-black flex items-center justify-center flex-shrink-0">
             <span className="text-white text-xs font-bold">{selectedCount}</span>
           </div>
           <span className="truncate">{selectedCount} job{selectedCount > 1 ? 's' : ''} selected</span>

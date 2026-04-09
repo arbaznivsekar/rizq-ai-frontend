@@ -631,7 +631,16 @@ function HomePageContent() {
                   job={job}
                   isSelected={selectedJobs.has(job._id)}
                   isAlreadyApplied={!!isAlreadyApplied}
-                  onToggle={() => toggleJobSelection(job._id)}
+                  onToggle={() => toggleJobSelection(job._id, {
+                    _id: job._id,
+                    title: job.title,
+                    company: job.company,
+                    location: job.location,
+                    description: job.description,
+                    companyDomain: job.companyDomain,
+                    logoUrl: job.logoUrl,
+                    url: job.url,
+                  })}
                   onViewDetails={() => {
                     // Save both job ID and pagination state
                     sessionStorage.setItem('lastViewedJobId', job._id);
