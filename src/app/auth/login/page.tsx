@@ -12,7 +12,7 @@ import { ArrowLeft, Shield, Info } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loginWithGmail, isAuthenticated } = useAuth();
+  const { loginWithGmail, isAuthenticated, loading } = useAuth();
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -24,6 +24,15 @@ export default function LoginPage() {
   const handleGmailLogin = () => {
     loginWithGmail();
   };
+
+  // While checking auth or if already authenticated, show a blank loader
+  if (loading || isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+        <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 p-4">
