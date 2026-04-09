@@ -1,24 +1,22 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { User, LogOut, LayoutDashboard, Briefcase, Search } from 'lucide-react';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { Separator } from '@/components/ui/separator';
+import { User, LogOut, Briefcase, FileText, Settings, ChevronRight, Search, LayoutDashboard } from 'lucide-react';
 
 export function Header() {
   const router = useRouter();
   const { user, isAuthenticated, logout } = useAuth();
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
 
   const handleLogout = async () => {
+    setProfileSheetOpen(false);
     await logout();
     router.push('/');
   };
@@ -75,44 +73,109 @@ export function Header() {
                 </Button>
               </>
             ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
-                      <span className="text-white font-medium text-sm">
-                        {user?.name?.charAt(0).toUpperCase() || 'U'}
-                      </span>
+              <>
+                <button
+                  onClick={() => setProfileSheetOpen(true)}
+                  aria-label="Profile menu"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
+                    <span className="text-white font-medium text-sm">
+                      {user?.name?.charAt(0).toUpperCase() || 'U'}
+                    </span>
+                  </div>
+                  <span className="hidden md:inline text-slate-700 font-medium text-sm">{user?.name}</span>
+                </button>
+
+                <Sheet open={profileSheetOpen} onOpenChange={setProfileSheetOpen}>
+                  <SheetContent side="right" className="w-[300px] sm:w-80 p-0 border-0 overflow-hidden rounded-l-3xl">
+                    <VisuallyHidden><SheetTitle>Profile Menu</SheetTitle></VisuallyHidden>
+                    {/* Glassmorphic top gradient */}
+                    <div
+                      className="px-6 pt-10 pb-7"
+                      style={{
+                        background: 'linear-gradient(145deg, #1d4ed8 0%, #2563eb 60%, #3b82f6 100%)',
+                      }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="w-16 h-16 rounded-2xl flex items-center justify-center border"
+                          style={{
+                            background: 'rgba(255,255,255,0.18)',
+                            backdropFilter: 'blur(16px)',
+                            WebkitBackdropFilter: 'blur(16px)',
+                            borderColor: 'rgba(255,255,255,0.3)',
+                          }}
+                        >
+                          <span className="text-[26px] font-bold text-white leading-none">
+                            {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-white font-bold text-[17px] leading-tight truncate">{user?.name}</p>
+                          <p className="text-blue-200 text-[12px] mt-0.5 truncate">{user?.email}</p>
+                          {(user as any)?.phone && <p className="text-blue-300 text-[12px]">{(user as any).phone}</p>}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-4 flex-wrap">
+                        {(user as any)?.roles?.map((role: string) => (
+                          <span
+                            key={role}
+                            className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                            style={{ background: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.95)', border: '1px solid rgba(255,255,255,0.3)' }}
+                          >
+                            {role}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <span className="hidden md:inline">{user?.name}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>
-                    <div>
-                      <p className="font-medium">{user?.name}</p>
-                      <p className="text-xs text-slate-500">{user?.email}</p>
+
+                    {/* Nav Items */}
+                    <nav className="px-3 py-3 space-y-0.5">
+                      {[
+                        { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                        { icon: User, label: 'My Profile', href: '/profile', color: 'text-blue-600', bg: 'bg-blue-50' },
+                        { icon: Briefcase, label: 'My Applications', href: '/applications', color: 'text-violet-600', bg: 'bg-violet-50' },
+                        { icon: FileText, label: 'Resume', href: '/profile#resume', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                        { icon: Settings, label: 'Settings', href: '/settings', color: 'text-slate-600', bg: 'bg-slate-100' },
+                      ].map(({ icon: Icon, label, href, color, bg }) => (
+                        <Link
+                          key={label}
+                          href={href}
+                          onClick={() => setProfileSheetOpen(false)}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-slate-50 transition-colors group"
+                        >
+                          <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
+                            <Icon className={`h-4 w-4 ${color}`} />
+                          </div>
+                          <span className="text-[15px] font-medium text-slate-800 flex-1">{label}</span>
+                          <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-400 transition-colors" />
+                        </Link>
+                      ))}
+                    </nav>
+
+                    <div className="mx-4">
+                      <Separator />
                     </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-                    <LayoutDashboard className="h-4 w-4 mr-2" />
-                    Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push('/applications')}>
-                    <Briefcase className="h-4 w-4 mr-2" />
-                    My Applications
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push('/profile')}>
-                    <User className="h-4 w-4 mr-2" />
-                    Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Log out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+
+                    <div className="px-3 py-3">
+                      <button
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-red-50/70 transition-colors w-full text-left group"
+                        onClick={handleLogout}
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0 group-hover:bg-red-100 transition-colors">
+                          <LogOut className="h-4 w-4 text-red-500" />
+                        </div>
+                        <span className="text-[15px] font-medium text-red-500 flex-1">Sign Out</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 text-center pb-6 pt-2">
+                      Member since {new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                    </p>
+                  </SheetContent>
+                </Sheet>
+              </>
             )}
           </div>
         </div>

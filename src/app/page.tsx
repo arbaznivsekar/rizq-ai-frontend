@@ -533,54 +533,56 @@ function HomePageContent() {
       <Header />
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="container mx-auto px-3 sm:px-4 py-4 md:py-8 max-w-6xl">
         {/* Search Card */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-2xl">Search Jobs</CardTitle>
-            <CardDescription className="text-base">
-              {total > 0 ? `Showing ${jobs.length} of ${total} jobs` : 'Start searching for your next opportunity'}
+        <Card className="shadow-sm md:shadow-lg">
+          <CardHeader className="pb-3 px-4 pt-4 md:px-6 md:pt-6 md:pb-6">
+            <CardTitle className="text-lg md:text-2xl">Search Jobs</CardTitle>
+            <CardDescription className="text-xs md:text-base">
+              {total > 0 ? `Showing ${jobs.length} of ${total} jobs` : 'Find your next opportunity'}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                <Input
-                  placeholder="Job title, keywords, or company..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="pl-10 h-12 text-base"
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch(true)}
-                />
+          <CardContent className="px-4 pb-4 pt-0 md:px-6 md:pb-6">
+            <div className="flex flex-col gap-2.5 md:gap-4">
+              <div className="flex flex-col sm:flex-row gap-2.5 md:gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-slate-400" />
+                  <Input
+                    placeholder="Job title, keywords, or company..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="pl-9 md:pl-10 h-11 md:h-12 text-sm md:text-base"
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch(true)}
+                  />
+                </div>
+                <div className="flex-1 relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 md:h-5 md:w-5 text-slate-400" />
+                  <Input
+                    placeholder="Location (optional)"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="pl-9 md:pl-10 h-11 md:h-12 text-sm md:text-base"
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch(true)}
+                  />
+                </div>
               </div>
-              <div className="flex-1 relative">
-                <MapPin className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-                <Input
-                  placeholder="Location (optional)"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="pl-10 h-12 text-base"
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch(true)}
-                />
-              </div>
-              <Button onClick={() => handleSearch(true)} disabled={loading} className="h-12 px-8 text-base">
+              <Button onClick={() => handleSearch(true)} disabled={loading} className="h-11 md:h-12 text-sm md:text-base w-full sm:w-auto sm:self-start sm:px-8">
                 {loading ? (
                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 md:h-5 md:w-5 animate-spin" />
                     Searching...
                   </>
                 ) : (
                   <>
-                    <Search className="mr-2 h-5 w-5" />
+                    <Search className="mr-2 h-4 w-4 md:h-5 md:w-5" />
                     Search
                   </>
                 )}
               </Button>
             </div>
             {error && (
-              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-800 text-sm">{error}</p>
+              <div className="mt-3 p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-800 text-xs md:text-sm">{error}</p>
               </div>
             )}
           </CardContent>
@@ -588,7 +590,7 @@ function HomePageContent() {
 
         {/* Loading State */}
         {loading && (
-          <div className="mt-8 space-y-4">
+          <div className="mt-4 md:mt-8 space-y-3 md:space-y-4">
             {[1, 2, 3].map((i) => (
               <Card key={i} className="animate-pulse">
                 <CardHeader>
@@ -607,7 +609,7 @@ function HomePageContent() {
         {/* Job Results */}
         {!loading && jobs.length > 0 && (
           <>
-          <div className="mt-8 space-y-4 mb-24">
+          <div className="mt-4 md:mt-8 space-y-3 md:space-y-4 mb-32 md:mb-10">
             {jobs.map((job, index) => {
               const jobStatus = applicationStatus[job._id];
               const isAlreadyApplied = jobStatus?.hasApplied && !jobStatus?.canReapply;
@@ -643,13 +645,13 @@ function HomePageContent() {
 
             {/* Load More Button */}
             {hasMore && (
-              <div className="mt-8 flex justify-center">
-                <Button 
-                  onClick={loadMore} 
+              <div className="mt-4 md:mt-8 flex justify-center px-1">
+                <Button
+                  onClick={loadMore}
                   disabled={loadingMore}
                   size="lg"
                   variant="outline"
-                  className="px-12"
+                  className="w-full sm:w-auto px-6 md:px-12"
                 >
                   {loadingMore ? (
                     <>
@@ -669,12 +671,12 @@ function HomePageContent() {
 
         {/* Empty State */}
         {!loading && jobs.length === 0 && !error && (
-          <div className="mt-8">
+          <div className="mt-4 md:mt-8">
             <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Search className="h-16 w-16 text-slate-300 mb-4" />
-                <h3 className="text-xl font-semibold text-slate-700 mb-2">No jobs found</h3>
-                <p className="text-slate-500 text-center">
+              <CardContent className="flex flex-col items-center justify-center py-10 md:py-12 px-4">
+                <Search className="h-12 w-12 md:h-16 md:w-16 text-slate-300 mb-3 md:mb-4" />
+                <h3 className="text-lg md:text-xl font-semibold text-slate-700 mb-1 md:mb-2">No jobs found</h3>
+                <p className="text-slate-500 text-sm text-center max-w-xs">
                   Try adjusting your search terms or removing the location filter
                 </p>
               </CardContent>
@@ -687,10 +689,10 @@ function HomePageContent() {
       <BulkApplyBar jobs={jobs} />
 
       {/* Footer */}
-      <footer className="mt-16 py-8 bg-white border-t">
+      <footer className="mt-8 md:mt-16 py-5 md:py-8 bg-white border-t">
         <div className="container mx-auto px-4 text-center text-slate-600">
-          <p>Built with ❤️ by RIZQ.AI Team</p>
-          <p className="text-sm mt-2">Powered by RIZQ.AI</p>
+          <p className="text-sm">Built with ❤️ by RIZQ.AI Team</p>
+          <p className="text-xs mt-1 md:mt-2">Powered by RIZQ.AI</p>
         </div>
       </footer>
     </div>
