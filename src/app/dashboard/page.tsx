@@ -373,28 +373,12 @@ export default function DashboardPage() {
           <div className="absolute top-1/2 right-8 w-20 h-20 rounded-full bg-white/5 blur-xl pointer-events-none" />
 
           <div className="relative z-10">
-            {/* Name row + avatar */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-gray-400 text-[12px] font-semibold uppercase tracking-widest mb-1">Welcome back</p>
-                <h1 className="text-white text-[24px] font-extrabold leading-tight tracking-tight">
-                  {user?.name} ✨
-                </h1>
-              </div>
-              {/* Avatar */}
-              <div
-                className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center border"
-                style={{
-                  background: 'rgba(255,255,255,0.18)',
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  borderColor: 'rgba(255,255,255,0.35)',
-                }}
-              >
-                <span className="text-xl font-bold text-white leading-none">
-                  {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
-                </span>
-              </div>
+            {/* Name row */}
+            <div>
+              <p className="text-gray-400 text-[12px] font-semibold uppercase tracking-widest mb-1">Welcome back</p>
+              <h1 className="text-white text-[24px] font-extrabold leading-tight tracking-tight">
+                {user?.name}
+              </h1>
             </div>
 
             {/* Email */}

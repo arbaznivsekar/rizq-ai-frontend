@@ -79,7 +79,7 @@ export function Header() {
                   aria-label="Profile menu"
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
                 >
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
+                  <div className="h-8 w-8 rounded-full bg-black flex items-center justify-center">
                     <span className="text-white font-medium text-sm">
                       {user?.name?.charAt(0).toUpperCase() || 'U'}
                     </span>
@@ -94,7 +94,7 @@ export function Header() {
                     <div
                       className="px-6 pt-10 pb-7"
                       style={{
-                        background: 'linear-gradient(145deg, #1d4ed8 0%, #2563eb 60%, #3b82f6 100%)',
+                        background: 'linear-gradient(145deg, #111111 0%, #1a1a1a 60%, #222222 100%)',
                       }}
                     >
                       <div className="flex items-center gap-4">
@@ -113,8 +113,8 @@ export function Header() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-white font-bold text-[17px] leading-tight truncate">{user?.name}</p>
-                          <p className="text-blue-200 text-[12px] mt-0.5 truncate">{user?.email}</p>
-                          {(user as any)?.phone && <p className="text-blue-300 text-[12px]">{(user as any).phone}</p>}
+                          <p className="text-gray-400 text-[12px] mt-0.5 truncate">{user?.email}</p>
+                          {(user as any)?.phone && <p className="text-gray-400 text-[12px]">{(user as any).phone}</p>}
                         </div>
                       </div>
                       <div className="flex gap-2 mt-4 flex-wrap">
@@ -133,11 +133,11 @@ export function Header() {
                     {/* Nav Items */}
                     <nav className="px-3 py-3 space-y-0.5">
                       {[
-                        { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', color: 'text-indigo-600', bg: 'bg-indigo-50' },
-                        { icon: User, label: 'My Profile', href: '/profile', color: 'text-blue-600', bg: 'bg-blue-50' },
-                        { icon: Briefcase, label: 'My Applications', href: '/applications', color: 'text-violet-600', bg: 'bg-violet-50' },
-                        { icon: FileText, label: 'Resume', href: '/profile#resume', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                        { icon: Settings, label: 'Settings', href: '/settings', color: 'text-slate-600', bg: 'bg-slate-100' },
+                        { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', color: 'text-gray-900', bg: 'bg-gray-100' },
+                        { icon: User, label: 'My Profile', href: '/profile', color: 'text-gray-900', bg: 'bg-gray-100' },
+                        { icon: Briefcase, label: 'My Applications', href: '/applications', color: 'text-gray-900', bg: 'bg-gray-100' },
+                        { icon: FileText, label: 'Resume', href: '/profile#resume', color: 'text-gray-900', bg: 'bg-gray-100' },
+                        { icon: Settings, label: 'Settings', href: '/settings', color: 'text-gray-900', bg: 'bg-gray-100' },
                       ].map(({ icon: Icon, label, href, color, bg }) => (
                         <Link
                           key={label}
@@ -160,13 +160,13 @@ export function Header() {
 
                     <div className="px-3 py-3">
                       <button
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-red-50/70 transition-colors w-full text-left group"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-gray-100 transition-colors w-full text-left group"
                         onClick={handleLogout}
                       >
-                        <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0 group-hover:bg-red-100 transition-colors">
-                          <LogOut className="h-4 w-4 text-red-500" />
+                        <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 group-hover:bg-gray-200 transition-colors">
+                          <LogOut className="h-4 w-4 text-gray-700" />
                         </div>
-                        <span className="text-[15px] font-medium text-red-500 flex-1">Sign Out</span>
+                        <span className="text-[15px] font-medium text-gray-700 flex-1">Sign Out</span>
                       </button>
                     </div>
 
