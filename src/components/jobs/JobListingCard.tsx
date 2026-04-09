@@ -46,8 +46,8 @@ export function JobListingCard({ job, isSelected, isAlreadyApplied, onToggle, on
             : 'hover:shadow-md'
       }`}
     >
-      <CardContent className="p-4">
-        <div className="flex gap-3">
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex gap-2.5 sm:gap-3">
 
           {/* Checkbox */}
           <div
@@ -70,11 +70,11 @@ export function JobListingCard({ job, isSelected, isAlreadyApplied, onToggle, on
 
             {/* Title + salary */}
             <div className="flex items-start justify-between gap-2">
-              <h3 className="text-base font-semibold leading-snug line-clamp-2 text-foreground">
+              <h3 className="text-sm sm:text-base font-semibold leading-snug line-clamp-2 text-foreground">
                 {job.title}
               </h3>
               {job.salaryMin && job.salaryMax && (
-                <Badge variant="secondary" className="text-xs px-2 py-0.5 flex-shrink-0">
+                <Badge variant="secondary" className="text-[11px] sm:text-xs px-1.5 sm:px-2 py-0.5 flex-shrink-0 whitespace-nowrap">
                   ₹{(job.salaryMin / 100000).toFixed(1)}-{(job.salaryMax / 100000).toFixed(1)}L
                 </Badge>
               )}
@@ -113,24 +113,24 @@ export function JobListingCard({ job, isSelected, isAlreadyApplied, onToggle, on
 
             {/* Description */}
             {job.description && (
-              <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+              <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 leading-relaxed">
                 {job.description}
               </p>
             )}
 
             {/* Skills */}
             {visibleSkills.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-1">
+              <div className="flex flex-wrap gap-1 sm:gap-1.5 mt-0.5 sm:mt-1">
                 {visibleSkills.map((skill) => (
                   <span
                     key={skill}
-                    className="px-2 py-0.5 bg-muted border border-border rounded-full text-xs text-muted-foreground truncate max-w-[140px]"
+                    className="px-1.5 sm:px-2 py-0.5 bg-muted border border-border rounded-full text-[11px] sm:text-xs text-muted-foreground truncate max-w-[100px] sm:max-w-[140px]"
                   >
                     {skill}
                   </span>
                 ))}
                 {extraCount > 0 && (
-                  <span className="px-2 py-0.5 bg-muted border border-border rounded-full text-xs text-muted-foreground">
+                  <span className="px-1.5 sm:px-2 py-0.5 bg-muted border border-border rounded-full text-[11px] sm:text-xs text-muted-foreground">
                     +{extraCount}
                   </span>
                 )}
@@ -141,7 +141,7 @@ export function JobListingCard({ job, isSelected, isAlreadyApplied, onToggle, on
             <Button
               asChild
               size="sm"
-              className="mt-2 w-full bg-black text-white hover:bg-black/90"
+              className="mt-1.5 sm:mt-2 w-full bg-black text-white hover:bg-black/90 h-9 text-xs sm:text-sm"
               onClick={onViewDetails}
             >
               <Link href={`/jobs/${job._id}`} className="flex items-center justify-center gap-1">

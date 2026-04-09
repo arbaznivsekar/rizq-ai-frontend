@@ -271,9 +271,22 @@ function ExperienceItem({ exp }: { exp: ProfileData['experience'][number] }) {
         {formatDate(exp.startDate)} — {exp.current ? 'Present' : formatDate(exp.endDate)}
         {exp.current && <Badge variant="outline" className="ml-1 text-[10px] py-0 h-4">Now</Badge>}
       </span>
-      {exp.description && (
-        <p className="mt-2 text-xs text-foreground leading-relaxed whitespace-pre-line">{exp.description}</p>
-      )}
+      {exp.description && (() => {
+        const bullets = exp.description
+          .split('\n')
+          .map(l => l.replace(/^[\s]*[-*•]\s*/, '').trim())
+          .filter(l => l.length > 0);
+        return bullets.length > 0 ? (
+          <ul className="mt-2 space-y-1">
+            {bullets.map((line, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-foreground leading-relaxed">
+                <span className="mt-[5px] w-1 h-1 rounded-full bg-violet-400 shrink-0" />
+                {line}
+              </li>
+            ))}
+          </ul>
+        ) : null;
+      })()}
     </div>
   );
 }
@@ -554,6 +567,18 @@ export default function ProfilePage() {
   const [newSkill, setNewSkill] = useState('');
   const [newTechnology, setNewTechnology] = useState('');
   const [selectedProjectIndex, setSelectedProjectIndex] = useState<number | null>(null);
+  const [activeEditTab, setActiveEditTab] = useState('basic');
+  useEffect(() => {
+    const activeTab = document.querySelector(
+      `[data-edit-tab="${activeEditTab}"]`
+    ) as HTMLElement | null
+  
+    activeTab?.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    })
+  }, [activeEditTab])
   const scrollRestoreKey = 'profile_scroll_position';
 
   useEffect(() => {
@@ -811,24 +836,28 @@ export default function ProfilePage() {
         ) : (
           <div className="px-4 pb-32 space-y-4">
 
-            <Tabs defaultValue="basic">
-              <ScrollArea className="w-full">
-                <TabsList className="inline-flex w-max gap-1 rounded-2xl bg-muted p-1 mb-1">
-                  {[
-                    { value: 'basic', icon: <User className="h-3 w-3" />, label: 'Basic' },
-                    { value: 'experience', icon: <Briefcase className="h-3 w-3" />, label: 'Work' },
-                    { value: 'education', icon: <GraduationCap className="h-3 w-3" />, label: 'Education' },
-                    { value: 'projects', icon: <Award className="h-3 w-3" />, label: 'Projects' },
-                    { value: 'preferences', icon: <Settings className="h-3 w-3" />, label: 'Prefs' },
-                    { value: 'social', icon: <Link2 className="h-3 w-3" />, label: 'Social' },
-                  ].map(tab => (
-                    <TabsTrigger key={tab.value} value={tab.value}
-                      className="rounded-xl text-xs font-medium px-3 py-2 gap-1.5 data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-sm whitespace-nowrap">
-                      {tab.icon}{tab.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </ScrollArea>
+<Tabs value={activeEditTab} onValueChange={setActiveEditTab}>
+  <div className="-mx-4 mb-1 overflow-x-auto px-4 no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+    <TabsList className="flex w-max min-w-full flex-nowrap gap-2 rounded-2xl bg-muted p-1 h-auto">
+      {[
+        { value: 'basic', icon: <User className="h-3 w-3" />, label: 'Basic' },
+        { value: 'experience', icon: <Briefcase className="h-3 w-3" />, label: 'Work' },
+        { value: 'education', icon: <GraduationCap className="h-3 w-3" />, label: 'Education' },
+        { value: 'projects', icon: <Award className="h-3 w-3" />, label: 'Projects' },
+        { value: 'preferences', icon: <Settings className="h-3 w-3" />, label: 'Prefs' },
+        { value: 'social', icon: <Link2 className="h-3 w-3" />, label: 'Social' },
+      ].map(tab => (
+        <TabsTrigger
+          key={tab.value}
+          value={tab.value}
+          data-edit-tab={tab.value}
+          className="shrink-0 rounded-xl text-xs font-medium px-3 py-2 gap-1.5 whitespace-nowrap data-[state=active]:bg-violet-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
+        >
+          {tab.icon}{tab.label}
+        </TabsTrigger>
+      ))}
+    </TabsList>
+  </div>
 
               {/* ── Basic tab ── */}
               <TabsContent value="basic" className="space-y-4 mt-3">

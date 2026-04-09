@@ -152,9 +152,11 @@ async function ensureAccessTokenRefreshed(): Promise<string | null> {
           });
         } else {
           clearAuthTokens();
+          if (isBrowser) window.dispatchEvent(new Event('auth:session-expired'));
         }
       } catch (error) {
         clearAuthTokens();
+        if (isBrowser) window.dispatchEvent(new Event('auth:session-expired'));
         if (process.env.NODE_ENV !== 'production') {
           // eslint-disable-next-line no-console
           console.error('Failed to refresh access token', error);

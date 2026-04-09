@@ -9,14 +9,12 @@ import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Briefcase, TrendingUp, CheckCircle, Clock, XCircle,
   MapPin, Building2, Loader2, ArrowRight, Sparkles,
-  RefreshCw, User, Calendar, Settings, LogOut, FileText, ChevronRight
+  RefreshCw, User, Calendar
 } from 'lucide-react';
 import CompanyLogo from '@/components/common/CompanyLogo';
 
@@ -80,7 +78,6 @@ export default function DashboardPage() {
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('ai-matches');
-  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const hasFetchedRecommendations = useRef(false);
@@ -260,96 +257,6 @@ export default function DashboardPage() {
       <Header />
 
       {/* ─────────────────────────────────────────
-          Profile / Navigation Sheet
-      ───────────────────────────────────────── */}
-      <Sheet open={profileSheetOpen} onOpenChange={setProfileSheetOpen}>
-        <SheetContent side="right" className="w-[300px] sm:w-80 p-0 border-0 overflow-hidden rounded-l-3xl">
-          {/* Glassmorphic top gradient */}
-          <div
-            className="px-6 pt-10 pb-7"
-            style={{
-              background: 'linear-gradient(145deg, #1d4ed8 0%, #2563eb 60%, #3b82f6 100%)',
-            }}
-          >
-            <div className="flex items-center gap-4">
-              <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center border"
-                style={{
-                  background: 'rgba(255,255,255,0.18)',
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
-                  borderColor: 'rgba(255,255,255,0.3)',
-                }}
-              >
-                <span className="text-[26px] font-bold text-white leading-none">
-                  {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
-                </span>
-              </div>
-              <div className="min-w-0">
-                <p className="text-white font-bold text-[17px] leading-tight truncate">{user?.name}</p>
-                <p className="text-blue-200 text-[12px] mt-0.5 truncate">{user?.email}</p>
-                {user?.phone && <p className="text-blue-300 text-[12px]">{user.phone}</p>}
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4 flex-wrap">
-              {user?.roles?.map(role => (
-                <span
-                  key={role}
-                  className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
-                  style={{ background: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.95)', border: '1px solid rgba(255,255,255,0.3)' }}
-                >
-                  {role}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Nav Items */}
-          <nav className="px-3 py-3 space-y-0.5">
-            {[
-              { icon: User, label: 'My Profile', href: '/profile', color: 'text-blue-600', bg: 'bg-blue-50' },
-              { icon: Briefcase, label: 'My Applications', href: '/applications', color: 'text-violet-600', bg: 'bg-violet-50' },
-              { icon: FileText, label: 'Resume', href: '/profile#resume', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-              { icon: Settings, label: 'Settings', href: '/settings', color: 'text-slate-600', bg: 'bg-slate-100' },
-            ].map(({ icon: Icon, label, href, color, bg }) => (
-              <Link
-                key={label}
-                href={href}
-                onClick={() => setProfileSheetOpen(false)}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-slate-50 transition-colors group"
-              >
-                <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
-                  <Icon className={`h-4 w-4 ${color}`} />
-                </div>
-                <span className="text-[15px] font-medium text-slate-800 flex-1">{label}</span>
-                <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-400 transition-colors" />
-              </Link>
-            ))}
-          </nav>
-
-          <div className="mx-4">
-            <Separator />
-          </div>
-
-          <div className="px-3 py-3">
-            <button
-              className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-red-50/70 transition-colors w-full text-left group"
-              onClick={() => { setProfileSheetOpen(false); router.push('/auth/logout'); }}
-            >
-              <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0 group-hover:bg-red-100 transition-colors">
-                <LogOut className="h-4 w-4 text-red-500" />
-              </div>
-              <span className="text-[15px] font-medium text-red-500 flex-1">Sign Out</span>
-            </button>
-          </div>
-
-          <p className="text-[11px] text-slate-400 text-center pb-6 pt-2">
-            Member since {new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
-          </p>
-        </SheetContent>
-      </Sheet>
-
-      {/* ─────────────────────────────────────────
           Page Content
       ───────────────────────────────────────── */}
       <div className="container mx-auto px-4 max-w-2xl pt-5 pb-28 md:pb-10 space-y-4">
@@ -376,11 +283,9 @@ export default function DashboardPage() {
                   {user?.name} ✨
                 </h1>
               </div>
-              {/* Avatar — opens profile sheet with nav */}
-              <button
-                onClick={() => setProfileSheetOpen(true)}
-                aria-label="Open profile navigation"
-                className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center border hover:scale-105 transition-transform active:scale-95"
+              {/* Avatar */}
+              <div
+                className="shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center border"
                 style={{
                   background: 'rgba(255,255,255,0.18)',
                   backdropFilter: 'blur(16px)',
@@ -391,7 +296,7 @@ export default function DashboardPage() {
                 <span className="text-xl font-bold text-white leading-none">
                   {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
                 </span>
-              </button>
+              </div>
             </div>
 
             {/* Email */}

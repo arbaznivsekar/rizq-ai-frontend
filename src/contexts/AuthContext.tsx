@@ -38,6 +38,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // When the token refresh fails (refresh token expired/invalid), force a clean logout
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      console.warn('[auth] Session expired - refresh token invalid, logging out');
+      clearAuthTokens();
+      setUser(null);
+      window.location.href = '/auth/login';
+    };
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
