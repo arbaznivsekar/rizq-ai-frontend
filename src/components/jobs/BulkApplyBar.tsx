@@ -1,20 +1,60 @@
 'use client';
 
-import { useState, useEffect,useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useJobSelection } from '@/contexts/JobSelectionContext';
-import { bulkApplyToJobs, generateProfessionalSummary, generateBatchResumes, generateEmailPreview, getEmailPreview, updateEmail, regenerateEmail, finalizeEmails } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, X, Loader2, Building2, MapPin,   Sparkles, RefreshCw, FileText, Download,  Mail, Send } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { bulkApplyToJobs, generateProfessionalSummary, generateBatchResumes, updateEmail, finalizeEmails, generateApplicationEmail } from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApplicationProgressModal } from '@/components/application/ApplicationProgressModal';
 import { EmailApplicationSuccessModal } from '@/components/application/EmailApplicationSuccessModal';
-import { CompanyLogo } from '@/components/common/CompanyLogo';
-import { EmailListView, EmailPreview } from './EmailListView';
+import { EmailPreview } from './EmailListView';
 import { SelectedJobsActionBar } from '@/components/jobs/SelectedJobsActionBar';
-import {ApplyJobsModalJobState,} from '@/components/jobs/ApplyJobsModal';
+import { ApplyJobsModalJobState } from '@/components/jobs/ApplyJobsModal';
 import { ApplyJobsModal } from '@/components/jobs/ApplyJobsModal';
+
 const MINIMUM_JOBS_REQUIRED = 1;
+const GEN_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// ── localStorage helpers ────────────────────────────────────────────────────
+
+interface PersistedJobData {
+  summary?: string;
+  summaryIsEdited?: boolean;
+  resumePdfUrl?: string;
+  resumeDownloadUrl?: string;
+  resumeGoogleDocUrl?: string;
+  emailSubject?: string;
+  emailBody?: string;
+  savedAt: number;
+}
+
+function genCacheKey(userId: string, jobId: string) {
+  return `rizq_gen_${userId}_${jobId}`;
+}
+
+function loadPersistedJobData(userId: string, jobId: string): PersistedJobData | null {
+  try {
+    const raw = localStorage.getItem(genCacheKey(userId, jobId));
+    if (!raw) return null;
+    const parsed: PersistedJobData = JSON.parse(raw);
+    if (Date.now() - parsed.savedAt > GEN_CACHE_TTL_MS) {
+      localStorage.removeItem(genCacheKey(userId, jobId));
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function savePersistedJobData(userId: string, jobId: string, data: Omit<PersistedJobData, 'savedAt'>) {
+  try {
+    localStorage.setItem(genCacheKey(userId, jobId), JSON.stringify({ ...data, savedAt: Date.now() }));
+  } catch {
+    // storage full or unavailable — not fatal
+  }
+}
 
 /**
  * Helper function to extract fileId from pdfDownloadUrl and construct proxy URL
@@ -66,42 +106,95 @@ interface ResumeState {
 
 export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
   const { selectedJobs, clearSelection, toggleJobSelection } = useJobSelection();
+  const { user } = useAuth();
+  const userId = (user as any)?._id || (user as any)?.id || '';
+
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [applying, setApplying] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressId, setProgressId] = useState<string | null>(null);
   const [showEmailSuccessModal, setShowEmailSuccessModal] = useState(false);
   const [emailSuccessSummary, setEmailSuccessSummary] = useState<{ queued: number; failed: number } | null>(null);
-  
-  // Tab management
-  const [activeTab, setActiveTab] = useState<'summaries' | 'resumes' | 'emails'>('summaries');
-  
+
   // Summary management
   const [summaries, setSummaries] = useState<Map<string, SummaryState>>(new Map());
-  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
-  
+
   // Resume management
   const [resumes, setResumes] = useState<Map<string, ResumeState>>(new Map());
   const [isGeneratingAllResumes, setIsGeneratingAllResumes] = useState(false);
-  
+
   // Email preview management
   const [emailPreview, setEmailPreview] = useState<EmailPreview[]>([]);
   const [isGeneratingEmails, setIsGeneratingEmails] = useState(false);
   const [emailProgressId, setEmailProgressId] = useState<string | null>(null);
-  
-  // Toggle job card expansion
-  const toggleJobExpansion = (jobId: string) => {
-    setExpandedJobs(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(jobId)) {
-        newSet.delete(jobId);
-      } else {
-        newSet.add(jobId);
+
+  // Load persisted generated content when a job is selected
+  useEffect(() => {
+    if (!userId) return;
+    selectedJobs.forEach(jobId => {
+      const cached = loadPersistedJobData(userId, jobId);
+      if (!cached) return;
+
+      if (cached.summary && !summaries.has(jobId)) {
+        setSummaries(prev => {
+          if (prev.has(jobId)) return prev;
+          const next = new Map(prev);
+          next.set(jobId, { summary: cached.summary!, isGenerating: false, isEdited: cached.summaryIsEdited ?? false });
+          return next;
+        });
       }
-      return newSet;
+
+      if (cached.resumeDownloadUrl && !resumes.has(jobId)) {
+        setResumes(prev => {
+          if (prev.has(jobId)) return prev;
+          const next = new Map(prev);
+          next.set(jobId, {
+            pdfUrl: cached.resumePdfUrl || '',
+            pdfDownloadUrl: cached.resumeDownloadUrl!,
+            googleDocUrl: cached.resumeGoogleDocUrl || '',
+            isGenerating: false,
+            error: null,
+          });
+          return next;
+        });
+      }
     });
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, selectedJobs]);
+
+  // Restore cached emails when modal opens
+  useEffect(() => {
+    if (!showBulkModal || !userId) return;
+    const restoredEmails: EmailPreview[] = [];
+    selectedJobsList.forEach((job, idx) => {
+      const cached = loadPersistedJobData(userId, job._id);
+      if (cached?.emailSubject && cached?.emailBody) {
+        restoredEmails.push({
+          emailIndex: idx,
+          jobId: job._id,
+          jobTitle: job.title,
+          companyName: job.company,
+          recipientEmail: '',
+          isPlaceholder: true,
+          subject: cached.emailSubject,
+          body: cached.emailBody,
+          generatedAt: new Date().toISOString(),
+        });
+      }
+    });
+    if (restoredEmails.length > 0) {
+      setEmailPreview(prev => {
+        const existingJobIds = new Set(prev.map(e => e.jobId));
+        const toAdd = restoredEmails.filter(e => !existingJobIds.has(e.jobId));
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBulkModal, userId]);
+
+  // Toggle job card expansion (unused, kept for reference)
+  const toggleJobExpansion = (_jobId: string) => { void _jobId; };
   
   // Generate summary for a single job
   const handleGenerateSummary = async (job: Job) => {
@@ -123,7 +216,12 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
         newMap.set(job._id, { summary, isGenerating: false, isEdited: false });
         return newMap;
       });
-      
+
+      if (userId) {
+        const existing = loadPersistedJobData(userId, job._id);
+        savePersistedJobData(userId, job._id, { ...existing, summary, summaryIsEdited: false });
+      }
+
       toast.success('Summary Generated', {
         description: `Professional summary created for ${job.title}`,
         duration: 3000,
@@ -228,7 +326,17 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
             });
             return newMap;
           });
-          
+
+          if (userId) {
+            const existing = loadPersistedJobData(userId, job._id);
+            savePersistedJobData(userId, job._id, {
+              ...existing,
+              resumePdfUrl: resume.pdfUrl || '',
+              resumeDownloadUrl: resume.pdfDownloadUrl || '',
+              resumeGoogleDocUrl: resume.googleDocUrl || '',
+            });
+          }
+
           toast.success('Resume Generated', {
             description: `Resume created for ${job.title}`,
             duration: 3000,
@@ -312,6 +420,15 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
                 isGenerating: false,
                 error: null
               });
+              if (userId) {
+                const existing = loadPersistedJobData(userId, resume.jobId);
+                savePersistedJobData(userId, resume.jobId, {
+                  ...existing,
+                  resumePdfUrl: resume.pdfUrl || '',
+                  resumeDownloadUrl: resume.pdfDownloadUrl || '',
+                  resumeGoogleDocUrl: resume.googleDocUrl || '',
+                });
+              }
             } else {
               newMap.set(resume.jobId, {
                 pdfUrl: '',
@@ -358,153 +475,121 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
     }
   };  
 
-  // Generate emails in preview mode
+  // Generate emails directly — only for jobs not already in emailPreview
   const handleGenerateEmails = async () => {
-    if (selectedJobs.size === 0) return;
+    const selectedJobsList = jobs.filter(job => selectedJobs.has(job._id));
+    // Only generate for jobs that don't already have an email
+    const jobsNeedingEmails = selectedJobsList.filter(
+      job => !emailPreview.some(e => e.jobId === job._id)
+    );
+    if (jobsNeedingEmails.length === 0) return;
 
     setIsGeneratingEmails(true);
     try {
-      const jobIds = Array.from(selectedJobs);
-      
-      // Collect summaries for selected jobs
-      const jobSummaries: Record<string, string> = {};
-      jobIds.forEach(jobId => {
-        const summaryState = summaries.get(jobId);
-        if (summaryState && summaryState.summary) {
-          jobSummaries[jobId] = summaryState.summary;
-        }
+      const results = await Promise.all(
+        jobsNeedingEmails.map(async (job) => {
+          // Use position in full selectedJobsList for stable emailIndex
+          const idx = selectedJobsList.findIndex(j => j._id === job._id);
+          const summary = summaries.get(job._id)?.summary;
+          const email = await generateApplicationEmail(job._id, summary);
+          return {
+            emailIndex: idx,
+            jobId: job._id,
+            jobTitle: job.title,
+            companyName: job.company,
+            recipientEmail: '',
+            isPlaceholder: true,
+            subject: email.subject,
+            body: email.body,
+            generatedAt: new Date().toISOString(),
+          };
+        })
+      );
+
+      // Merge new emails with existing ones (don't wipe out cached emails)
+      setEmailPreview(prev => {
+        const existingJobIds = new Set(prev.map(e => e.jobId));
+        const toAdd = results.filter(r => !existingJobIds.has(r.jobId));
+        return [...prev, ...toAdd];
       });
-      
-      // Generate emails in preview mode
-      const result = await generateEmailPreview(jobIds, undefined, jobSummaries);
-      
-      if (result.success && result.data?.progressId) {
-        setEmailProgressId(result.data.progressId);
-        
-        // Poll for email preview
-        let attempts = 0;
-        const maxAttempts = 60; // 60 seconds max wait (emails can take time to generate)
-        
-        const pollForEmails = async () => {
-          try {
-            const previewResult = await getEmailPreview(result.data.progressId);
+      setEmailProgressId(null);
 
-            if (
-              previewResult?.success &&
-              previewResult.data?.emails &&
-              previewResult.data.emails.length > 0
-            ) {
-              setEmailPreview(previewResult.data.emails);
-              setActiveTab('emails');
-              setIsGeneratingEmails(false); // Stop loading when emails are successfully retrieved
-              toast.success('Emails Generated', {
-                description: `Generated ${previewResult.data.emails.length} personalized emails`,
-                duration: 3000,
-              });
-              return;
-            }
-
-            // If backend reported a hard error (5xx), stop polling and surface it
-            if (previewResult?.status && previewResult.status >= 500) {
-              setIsGeneratingEmails(false);
-              toast.error('Email Preview Failed', {
-                description:
-                  previewResult.error ||
-                  'There was a problem generating email previews. Please try again.',
-                duration: 5000,
-              });
-              return;
-            }
-
-            // For 404/not-ready or generic "no data yet", just keep polling
-            if (previewResult?.status === 404 || !previewResult?.success) {
-              console.log(
-                `Email preview not ready yet (attempt ${attempts + 1}/${maxAttempts})`
-              );
-            }
-          } catch (error: any) {
-            console.error('Failed to get email preview:', error);
-          }
-
-          attempts++;
-          if (attempts < maxAttempts) {
-            setTimeout(pollForEmails, 2000); // Poll every 2 seconds
-          } else {
-            setIsGeneratingEmails(false); // Stop loading on timeout
-            toast.error('Email Generation Timeout', {
-              description: 'Emails are still being generated. Please try again in a moment.',
-              duration: 5000,
-            });
-          }
-        };
-        
-        // Start polling after a short delay to allow backend to start processing
-        setTimeout(pollForEmails, 3000);
-      } else {
-        // If no progressId was returned, stop loading immediately
-        setIsGeneratingEmails(false);
+      // Persist each new email to localStorage
+      if (userId) {
+        results.forEach(result => {
+          const existing = loadPersistedJobData(userId, result.jobId);
+          savePersistedJobData(userId, result.jobId, {
+            ...existing,
+            emailSubject: result.subject,
+            emailBody: result.body,
+          });
+        });
       }
+
+      toast.success('Emails Generated', {
+        description: `Generated ${results.length} personalized email${results.length === 1 ? '' : 's'}`,
+        duration: 3000,
+      });
     } catch (err) {
-      console.error('Email generation failed:', err);
       const error = err as { response?: { data?: { error?: string; message?: string } } };
       const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Failed to generate emails. Please try again.';
-      setIsGeneratingEmails(false); // Stop loading on error
-      toast.error('Email Generation Failed', {
-        description: errorMsg,
-        duration: 5000,
-      });
+      toast.error('Email Generation Failed', { description: errorMsg, duration: 5000 });
+    } finally {
+      setIsGeneratingEmails(false);
     }
-    // Removed finally block - loading state is now managed in each code path
   };
 
-  // Handle email update
+  // Handle email update — always local state (no backend round-trip needed)
   const handleEmailUpdate = async (emailIndex: number, subject: string, body: string, recipientEmail?: string) => {
-    if (!emailProgressId) return;
-    try {
-      const result = await updateEmail(emailProgressId, emailIndex, subject, body);
-      if (result.success) {
-        setEmailPreview(prev => prev.map(email => 
-          email.emailIndex === emailIndex 
-            ? { 
-                ...email, 
-                subject, 
-                body, 
-                recipientEmail: recipientEmail || email.recipientEmail,
-                lastModified: new Date().toISOString(),
-                isPlaceholder: recipientEmail ? false : email.isPlaceholder // Clear placeholder flag if email was updated
-              }
-            : email
-        ));
+    setEmailPreview(prev => prev.map(email =>
+      email.emailIndex === emailIndex
+        ? {
+            ...email,
+            subject,
+            body,
+            recipientEmail: recipientEmail || email.recipientEmail,
+            lastModified: new Date().toISOString(),
+            isPlaceholder: recipientEmail ? false : email.isPlaceholder,
+          }
+        : email
+    ));
+
+    // If we have a progressId (orchestrator flow), also sync to backend
+    if (emailProgressId) {
+      try {
+        await updateEmail(emailProgressId, emailIndex, subject, body);
+      } catch (error) {
+        console.error('Failed to sync email update to backend:', error);
       }
-    } catch (error) {
-      console.error('Failed to update email:', error);
-      throw error;
     }
   };
 
   // Handle email regenerate
   const handleEmailRegenerate = async (emailIndex: number) => {
-    if (!emailProgressId) return;
+    const target = emailPreview.find(e => e.emailIndex === emailIndex);
+    if (!target) return;
+
     try {
-      const result = await regenerateEmail(emailProgressId, emailIndex);
-      if (result.success && result.data) {
-        setEmailPreview(prev => prev.map(email => 
-          email.emailIndex === emailIndex 
-            ? { ...email, subject: result.data.subject, body: result.data.body, generatedAt: result.data.generatedAt }
-            : email
-        ));
-        toast.success('Email Regenerated', {
-          description: 'The email has been regenerated with AI',
-          duration: 3000,
+      // Direct path: re-call the fast endpoint
+      const summary = summaries.get(target.jobId)?.summary;
+      const email = await generateApplicationEmail(target.jobId, summary);
+      setEmailPreview(prev => prev.map(e =>
+        e.emailIndex === emailIndex
+          ? { ...e, subject: email.subject, body: email.body, generatedAt: new Date().toISOString() }
+          : e
+      ));
+      if (userId) {
+        const existing = loadPersistedJobData(userId, target.jobId);
+        savePersistedJobData(userId, target.jobId, {
+          ...existing,
+          emailSubject: email.subject,
+          emailBody: email.body,
         });
       }
+      toast.success('Email Regenerated', { description: 'Email regenerated with AI', duration: 3000 });
     } catch (error) {
       console.error('Failed to regenerate email:', error);
-      toast.error('Regeneration Failed', {
-        description: 'Failed to regenerate email. Please try again.',
-        duration: 5000,
-      });
-      throw error;
+      toast.error('Regeneration Failed', { description: 'Failed to regenerate email. Please try again.', duration: 5000 });
     }
   };
 
@@ -539,8 +624,6 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
 
   // Handle finalize and send emails
   const handleFinalizeEmails = async () => {
-    if (!emailProgressId) return;
-    
     setApplying(true);
     try {
       // Build mapping of jobId -> pdfDownloadUrl for resumes that were generated
@@ -565,39 +648,56 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
         }
       }
 
-      const result = await finalizeEmails(
-        emailProgressId,
-        resumeDownloads,
-        emailPreview.map(email => email.jobId)
-      );
-      
-      if (result.success) {
-        const queued = result.data?.queued ?? 0;
-        const failed = result.data?.failed ?? 0;
+      let queued = 0;
+      let failed = 0;
 
-        toast.success('Applications Sent Successfully', {
-          description: `${queued} application${queued === 1 ? '' : 's'} sent successfully${failed > 0 ? `, ${failed} failed` : ''}.`,
-          duration: 4000,
+      if (emailProgressId) {
+        // Orchestrator flow — finalize via backend progress session
+        const result = await finalizeEmails(
+          emailProgressId,
+          resumeDownloads,
+          emailPreview.map(e => e.jobId)
+        );
+        queued = result.data?.queued ?? 0;
+        failed = result.data?.failed ?? 0;
+      } else {
+        // Direct flow — trigger bulk apply (email discovery + send) via orchestrator
+        const jobIds = emailPreview.map(e => e.jobId);
+        const jobSummaries: Record<string, string> = {};
+        jobIds.forEach(jobId => {
+          const s = summaries.get(jobId)?.summary;
+          if (s) jobSummaries[jobId] = s;
         });
-
-        // Close bulk modal & clear state
-        setShowBulkModal(false);
-        setEmailPreview([]);
-        setEmailProgressId(null);
-        clearSelection();
-
-        // Show success modal with confetti & stats
-        setEmailSuccessSummary({ queued, failed });
-        setShowEmailSuccessModal(true);
+        const result = await bulkApplyToJobs(jobIds, undefined, jobSummaries);
+        if (result.success && result.data?.progressId) {
+          // Show progress modal so user can track sending
+          setShowBulkModal(false);
+          setEmailPreview([]);
+          setEmailProgressId(null);
+          clearSelection();
+          setProgressId(result.data.progressId);
+          setShowProgressModal(true);
+          return;
+        }
+        queued = result.data?.totalJobs ?? jobIds.length;
       }
+
+      toast.success('Applications Sent Successfully', {
+        description: `${queued} application${queued === 1 ? '' : 's'} sent successfully${failed > 0 ? `, ${failed} failed` : ''}.`,
+        duration: 4000,
+      });
+
+      setShowBulkModal(false);
+      setEmailPreview([]);
+      setEmailProgressId(null);
+      clearSelection();
+      setEmailSuccessSummary({ queued, failed });
+      setShowEmailSuccessModal(true);
     } catch (err) {
       console.error('Finalize failed:', err);
       const error = err as { response?: { data?: { error?: string; message?: string } } };
       const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Failed to send emails. Please try again.';
-      toast.error('Send Failed', {
-        description: errorMsg,
-        duration: 5000,
-      });
+      toast.error('Send Failed', { description: errorMsg, duration: 5000 });
     } finally {
       setApplying(false);
     }
@@ -793,7 +893,7 @@ export function BulkApplyBar({ jobs }: BulkApplyBarProps) {
   onOpenChange={(open) => {
     if (!open) {
       setShowBulkModal(false);
-      setEmailPreview([]);
+      // Do NOT clear emailPreview here — emails persist across modal open/close
       setEmailProgressId(null);
     }
   }}

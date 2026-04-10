@@ -629,6 +629,15 @@ export const regenerateEmail = async (progressId: string, emailIndex: number) =>
   return response.data;
 };
 
+// Generate application email directly (fast, synchronous, no polling needed)
+export const generateApplicationEmail = async (
+  jobId: string,
+  professionalSummary?: string
+): Promise<{ subject: string; body: string; tone: string }> => {
+  const response = await api.post('/resumes/generate-email', { jobId, professionalSummary });
+  return response.data.email;
+};
+
 export const finalizeEmails = async (
   progressId: string,
   resumeDownloads?: Record<string, string>,
