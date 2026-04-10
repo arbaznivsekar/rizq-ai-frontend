@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Mail, RefreshCw, Loader2, CheckCircle2, X } from 'lucide-react';
+import { Building2, Mail, RefreshCw, Loader2, CheckCircle2, X } from 'lucide-react'; // Loader2 kept for isSaving badge
 
 export interface EmailPreview {
   emailIndex: number;
@@ -199,25 +199,16 @@ export function EmailListView({
                   )}
                 </div>
 
-                {/* ✅ FIX 1: Regenerate button — full width, always visible */}
+                {/* Regenerate button — full width, always visible */}
                 <Button
                   size="sm"
-                  variant="outline"
-                  className="w-full"
+                  variant={isRegenerating ? "secondary" : "outline"}
+                  className="w-full transition-all"
                   onClick={() => handleRegenerate(email.emailIndex)}
                   disabled={isRegenerating || isGenerating}
                 >
-                  {isRegenerating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Regenerating...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Regenerate Email
-                    </>
-                  )}
+                  <RefreshCw className={`h-4 w-4 mr-2 transition-transform ${isRegenerating ? 'animate-spin' : ''}`} />
+                  {isRegenerating ? 'Regenerating...' : 'Regenerate Email'}
                 </Button>
 
               </div>

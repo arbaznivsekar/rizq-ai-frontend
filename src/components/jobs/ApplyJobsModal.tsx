@@ -82,6 +82,12 @@ export function ApplyJobsModal({
     [activeTab, emailPreview.length, isGeneratingEmails]
   )
 
+  // Jobs that don't yet have a generated email
+  const jobsMissingEmails = useMemo(
+    () => jobs.filter(job => !emailPreview.some(e => e.jobId === job.id)),
+    [jobs, emailPreview]
+  )
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -386,6 +392,27 @@ export function ApplyJobsModal({
                   </div>
                 ) : (
                   <div className="space-y-4 pb-4">
+                    {/* Banner for newly added jobs missing an email */}
+                    {jobsMissingEmails.length > 0 && (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                        <p className="text-xs text-amber-700">
+                          <span className="font-semibold">{jobsMissingEmails.length} job{jobsMissingEmails.length > 1 ? 's' : ''}</span> {jobsMissingEmails.length > 1 ? 'need' : 'needs'} an email
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100"
+                          onClick={onGenerateEmails}
+                          disabled={isGeneratingEmails || !canGenerateEmails}
+                        >
+                          {isGeneratingEmails ? (
+                            <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Generating...</>
+                          ) : (
+                            <><Sparkles className="h-3.5 w-3.5 mr-1.5" />Generate</>
+                          )}
+                        </Button>
+                      </div>
+                    )}
                     <EmailListView
                       emails={emailPreview}
                       onUpdate={async (emailIndex, subject, body, recipientEmail) => {

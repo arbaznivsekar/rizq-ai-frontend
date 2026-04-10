@@ -105,6 +105,41 @@ export default function LoginPage() {
               </AlertDescription>
             </Alert>
 
+            {/* Google Data Disclosure (verification-friendly) */}
+            <Alert className="bg-blue-50 border-blue-200">
+              <Info className="h-4 w-4 text-blue-700" />
+              <AlertDescription className="text-xs text-slate-700 leading-relaxed space-y-2">
+                <p className="font-medium text-slate-900">Google data disclosure</p>
+                <p>
+                  We request Google OAuth scopes only for sign-in and sending job application emails from your
+                  connected Gmail account with your action.
+                </p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>
+                    Gmail send access: <code>gmail.send</code> and <code>mail.google.com</code>
+                  </li>
+                  <li>
+                    Basic profile access: <code>userinfo.email</code> and <code>userinfo.profile</code>
+                  </li>
+                </ul>
+                <p>
+                  We do not use Google data for ads and do not train generalized AI models with Gmail data. You can
+                  revoke access anytime from Google Account permissions.
+                </p>
+                <p>
+                  Read details in our{' '}
+                  <Link href="/privacy#google-data-access" className="text-blue-700 hover:text-blue-800 underline">
+                    Privacy Policy
+                  </Link>
+                  {' '}and{' '}
+                  <Link href="/terms#google-api-terms" className="text-blue-700 hover:text-blue-800 underline">
+                    Terms &amp; Conditions
+                  </Link>
+                  .
+                </p>
+              </AlertDescription>
+            </Alert>
+
             {/* What We'll Use Your Gmail For */}
             <div className="text-center space-y-2">
               <p className="text-xs font-medium text-slate-700">What we'll use your Gmail for:</p>
