@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +19,8 @@ export interface EmailPreview {
   generatedAt: string;
   lastModified?: string;
   isPlaceholder?: boolean;
+  /** Explicitly set after email discovery. true = verified, false = unverified, undefined = not yet discovered */
+  isVerified?: boolean;
 }
 
 interface EmailListViewProps {
@@ -40,6 +42,30 @@ export function EmailListView({
   const [savingStates, setSavingStates] = useState<Set<number>>(new Set());
   const [regeneratingStates, setRegeneratingStates] = useState<Set<number>>(new Set());
   const [saveTimeouts, setSaveTimeouts] = useState<Map<number, NodeJS.Timeout>>(new Map());
+
+  useEffect(() => {
+    setEditingStates(prev => {
+      const next = new Map<number, { subject: string; body: string; recipientEmail: string }>();
+      let changed = false;
+
+      for (const email of emails) {
+        const existing = prev.get(email.emailIndex);
+        if (existing) {
+          next.set(email.emailIndex, existing);
+        } else {
+          changed = true;
+          next.set(email.emailIndex, {
+            subject: email.subject,
+            body: email.body,
+            recipientEmail: email.recipientEmail,
+          });
+        }
+      }
+
+      if (prev.size !== next.size) changed = true;
+      return changed ? next : prev;
+    });
+  }, [emails]);
 
   const initializeEditingState = (email: EmailPreview) => {
     if (!editingStates.has(email.emailIndex)) {
@@ -140,15 +166,11 @@ export function EmailListView({
         const isRegenerating = regeneratingStates.has(email.emailIndex);
         const isEdited = email.lastModified && new Date(email.lastModified) > new Date(email.generatedAt);
 
-        if (!editingStates.has(email.emailIndex)) {
-          initializeEditingState(email);
-        }
-
         return (
           <Card key={email.emailIndex} className="relative border-slate-200 overflow-hidden">
 
-            {/* ✅ FIX 2: X button top-right corner for unverified emails */}
-            {email.isPlaceholder && (
+            {/* X button — only for explicitly unverified emails */}
+            {email.isVerified === false && (
               <button
                 type="button"
                 onClick={() => onRemove(email.emailIndex, email.jobId)}
@@ -171,13 +193,13 @@ export function EmailListView({
                   </CardTitle>
                   <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-slate-600">
                     <span className="truncate max-w-[160px]">{email.companyName}</span>
-                    {email.isPlaceholder && (
+                    {email.isVerified === false && (
                       <Badge
                         variant="outline"
                         className="text-xs border-orange-300 text-orange-600 bg-orange-50 flex-shrink-0"
-                        title="This email address is unverified and may not be delivered to the recruiter."
+                        title="No verified recruiter email found for this company."
                       >
-                        Unverified email
+                        Unverified
                       </Badge>
                     )}
                   </div>
@@ -202,12 +224,12 @@ export function EmailListView({
                 {/* Regenerate button — full width, always visible */}
                 <Button
                   size="sm"
-                  variant={isRegenerating ? "secondary" : "outline"}
-                  className="w-full transition-all"
+                  variant="default"
+                  className="w-full bg-neutral-800 hover:bg-neutral-700 active:scale-[0.97] active:bg-neutral-900 transition-transform"
                   onClick={() => handleRegenerate(email.emailIndex)}
                   disabled={isRegenerating || isGenerating}
                 >
-                  <RefreshCw className={`h-4 w-4 mr-2 transition-transform ${isRegenerating ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRegenerating ? 'animate-spin' : ''}`} />
                   {isRegenerating ? 'Regenerating...' : 'Regenerate Email'}
                 </Button>
 

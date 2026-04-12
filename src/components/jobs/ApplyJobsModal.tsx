@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, useRef } from "react"
 import { Sparkles, FileText, Loader2, Mail, Send, RefreshCw } from "lucide-react"
 import {
   Sheet,
@@ -48,10 +48,11 @@ interface ApplyJobsModalProps {
   onGenerateResumeForJob: (jobId: string) => void
   onGenerateEmails: () => void
   onUpdateEmail: (emailIndex: number, subject: string, body: string, recipientEmail?: string) => void
-  onRegenerateEmail: (emailIndex: number) => void
+  onRegenerateEmail: (emailIndex: number) => Promise<void>
   onRemoveEmailApplication: (emailIndex: number, jobId: string) => void
   onFinalizeEmails: () => void
   applying: boolean
+  verifiedSentCount: number
 }
 
 export function ApplyJobsModal({
@@ -74,8 +75,32 @@ export function ApplyJobsModal({
   onRemoveEmailApplication,
   onFinalizeEmails,
   applying,
+  verifiedSentCount,
 }: ApplyJobsModalProps) {
   const [activeTab, setActiveTab] = useState<"summary" | "resumes" | "emails">("summary")
+
+  // Drag-to-dismiss
+  const [dragOffset, setDragOffset] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef({ active: false, startY: 0 })
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    dragRef.current.active = true
+    dragRef.current.startY = e.touches[0].clientY
+    setIsDragging(true)
+  }
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!dragRef.current.active) return
+    const delta = e.touches[0].clientY - dragRef.current.startY
+    if (delta > 0) setDragOffset(delta)
+  }
+  const handleTouchEnd = () => {
+    const shouldClose = dragOffset > 150
+    dragRef.current.active = false
+    setIsDragging(false)
+    setDragOffset(0)
+    if (shouldClose) onOpenChange(false)
+  }
 
   const canSendEmails = useMemo(
     () => activeTab === "emails" && emailPreview.length > 0 && !isGeneratingEmails,
@@ -93,7 +118,14 @@ export function ApplyJobsModal({
       <SheetContent
         side="bottom"
         className="rounded-t-3xl px-0 pb-0 pt-3 h-[92vh] max-h-[92vh] flex flex-col border-none shadow-xl bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-4"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        style={{
+          paddingBottom: "env(safe-area-inset-bottom)",
+          transform: `translateY(${dragOffset}px)`,
+          transition: isDragging ? "none" : "transform 0.3s ease",
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col overflow-hidden sm:max-w-2xl lg:max-w-4xl">
 
@@ -114,19 +146,19 @@ export function ApplyJobsModal({
             </SheetHeader>
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Button
-                variant="outline"
-                className="w-full justify-start gap-3"
+                variant="default"
+                className="w-full justify-start gap-3 bg-neutral-800 hover:bg-neutral-700 active:scale-[0.97] active:bg-neutral-900 transition-transform"
                 onClick={onGenerateSummaries}
               >
-                <Sparkles className="h-4 w-4 text-purple-500" />
+                <Sparkles className="h-4 w-4" />
                 <span className="text-sm font-medium">Generate All Summaries</span>
               </Button>
               <Button
-                variant="outline"
-                className="w-full justify-start gap-3"
+                variant="default"
+                className="w-full justify-start gap-3 bg-neutral-800 hover:bg-neutral-700 active:scale-[0.97] active:bg-neutral-900 transition-transform"
                 onClick={onGenerateResumes}
               >
-                <FileText className="h-4 w-4 text-green-500" />
+                <FileText className="h-4 w-4" />
                 <span className="text-sm font-medium">Generate All Resumes</span>
               </Button>
             </div>
@@ -143,22 +175,22 @@ export function ApplyJobsModal({
             onValueChange={(v) => setActiveTab(v as typeof activeTab)}
             className="flex flex-1 flex-col min-h-0 overflow-hidden"
           >
-            <TabsList className="flex-shrink-0 w-full rounded-none border-b bg-transparent h-auto p-0 justify-start overflow-x-auto">
+            <TabsList className="flex-shrink-0 w-full rounded-none border-b bg-transparent h-auto px-4 py-0 justify-start overflow-x-auto gap-1">
               <TabsTrigger
                 value="summary"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:shadow-none flex-shrink-0 px-4 py-3 text-sm sm:text-base font-medium"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:shadow-none flex-shrink-0 px-3 py-3 text-sm font-medium"
               >
                 Professional Summary
               </TabsTrigger>
               <TabsTrigger
                 value="resumes"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:shadow-none flex-shrink-0 px-4 py-3 text-sm sm:text-base font-medium"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:shadow-none flex-shrink-0 px-3 py-3 text-sm font-medium"
               >
                 Resumes
               </TabsTrigger>
               <TabsTrigger
                 value="emails"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:shadow-none flex-shrink-0 px-4 py-3 text-sm sm:text-base font-medium"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:shadow-none flex-shrink-0 px-3 py-3 text-sm font-medium"
               >
                 Emails
               </TabsTrigger>
@@ -196,8 +228,8 @@ export function ApplyJobsModal({
                       {/* Button — full width so always visible */}
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="w-full"
+                        variant="default"
+                        className="w-full bg-neutral-800 hover:bg-neutral-700 active:scale-[0.97] active:bg-neutral-900 transition-transform"
                         disabled={state.summaryIsGenerating}
                         onClick={() => onGenerateSummaryForJob(job.id)}
                       >
@@ -272,8 +304,8 @@ export function ApplyJobsModal({
                       {/* Generate button — full width */}
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="w-full"
+                        variant="default"
+                        className="w-full bg-neutral-800 hover:bg-neutral-700 active:scale-[0.97] active:bg-neutral-900 transition-transform"
                         disabled={state.resumeIsGenerating}
                         onClick={() => onGenerateResumeForJob(job.id)}
                       >
@@ -394,14 +426,14 @@ export function ApplyJobsModal({
                   <div className="space-y-4 pb-4">
                     {/* Banner for newly added jobs missing an email */}
                     {jobsMissingEmails.length > 0 && (
-                      <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-                        <p className="text-xs text-amber-700">
-                          <span className="font-semibold">{jobsMissingEmails.length} job{jobsMissingEmails.length > 1 ? 's' : ''}</span> {jobsMissingEmails.length > 1 ? 'need' : 'needs'} an email
+                      <div className="flex items-center justify-between gap-3 rounded-xl border bg-background px-3 py-2.5">
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-semibold text-foreground">{jobsMissingEmails.length} job{jobsMissingEmails.length > 1 ? 's' : ''}</span> {jobsMissingEmails.length > 1 ? 'need' : 'needs'} an email
                         </p>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="flex-shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100"
+                          variant="default"
+                          className="flex-shrink-0 bg-neutral-800 hover:bg-neutral-700 active:scale-[0.97] active:bg-neutral-900 transition-transform"
                           onClick={onGenerateEmails}
                           disabled={isGeneratingEmails || !canGenerateEmails}
                         >
@@ -419,7 +451,7 @@ export function ApplyJobsModal({
                         onUpdateEmail(emailIndex, subject, body, recipientEmail)
                       }}
                       onRegenerate={async (emailIndex) => {
-                        onRegenerateEmail(emailIndex)
+                        await onRegenerateEmail(emailIndex)
                       }}
                       isGenerating={isGeneratingEmails}
                       onRemove={onRemoveEmailApplication}
