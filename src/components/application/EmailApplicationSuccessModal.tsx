@@ -1,23 +1,29 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle2, Send, XCircle, Clock } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { CheckCircle2, Send, XCircle, Clock, ExternalLink } from 'lucide-react';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
+import type { QuotaSummary } from '@/lib/api';
 
 interface EmailApplicationSuccessModalProps {
   queued: number;
   failed: number;
   onClose: () => void;
+  quota?: QuotaSummary | null;
 }
 
 export function EmailApplicationSuccessModal({
   queued,
   failed,
   onClose,
+  quota,
 }: EmailApplicationSuccessModalProps) {
+  const router = useRouter();
   const confettiRef = useRef<ConfettiRef>(null);
   const [isOpeningGmail, setIsOpeningGmail] = useState(false);
 
@@ -237,60 +243,81 @@ export function EmailApplicationSuccessModal({
             </div>
           </div>
 
+          {/* Quota summary — shows batch usage + cooldown info right in the success card */}
+          {quota && quota.batchesUsed > 0 && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  <span className="text-xs font-medium text-gray-600">
+                    Batch {quota.batchesUsed} of {quota.batchesPerDay} used today
+                  </span>
+                </div>
+                <Badge variant="outline" className="text-xs border-gray-200 text-gray-500 bg-white">
+                  {quota.usedToday} / {quota.dailyLimit} apps
+                </Badge>
+              </div>
+              {quota.reason === 'batch_cooldown' && quota.nextAvailableAt && (
+                <p className="text-xs text-amber-600 pl-5">
+                  Next batch unlocks at {new Date(quota.nextAvailableAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+              {quota.batchesUsed < quota.batchesPerDay && quota.reason !== 'batch_cooldown' && (
+                <p className="text-xs text-emerald-600 pl-5">
+                  Batch {quota.batchesUsed + 1} available — select {quota.batchSize} jobs to apply
+                </p>
+              )}
+              {(quota.reason === 'daily_limit_reached' || quota.reason === 'max_batches_reached') && (
+                <p className="text-xs text-red-500 pl-5">
+                  Daily limit reached · resets at midnight UTC
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Actions */}
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              onClick={handleOpenGmail}
-              disabled={isOpeningGmail}
-              aria-label="Open Gmail sent folder"
-              className="sm:min-w-[10rem]"
-            >
-              {/* Real Gmail Logo */}
-              <svg
-                className="w-5 h-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
+          <div className="flex flex-col gap-3 pt-2">
+            {/* Primary action row */}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={handleOpenGmail}
+                disabled={isOpeningGmail}
+                aria-label="Open Gmail sent folder"
+                className="flex-1"
               >
-                {/* Gmail M shape with correct colors */}
-                <path
-                  d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L12 9.366l8.073-5.873C21.69 2.28 24 3.434 24 5.457z"
-                  fill="#4285F4"
-                />
-                <path
-                  d="M0 5.457v.727l12 8.727 12-8.727v-.727c0-2.023-2.31-3.178-3.927-1.964L12 9.366 3.927 3.493C2.31 2.28 0 3.434 0 5.457z"
-                  fill="#34A853"
-                />
-                <path
-                  d="M18.545 11.73v9.273h3.819c.904 0 1.636-.732 1.636-1.636V11.73L12 16.64z"
-                  fill="#FBBC04"
-                />
-                <path
-                  d="M1.636 21.003h3.819V11.73L0 16.64v2.727c0 .904.732 1.636 1.636 1.636z"
-                  fill="#EA4335"
-                />
-                <path
-                  d="M12 16.64l-6.545-4.91v9.273h6.545V16.64z"
-                  fill="#C5221F"
-                />
-                <path
-                  d="M18.545 11.73L12 16.64v4.363h6.545V11.73z"
-                  fill="#C5221F"
-                />
-              </svg>
-              <span>{isOpeningGmail ? 'Opening Gmail…' : 'Open Gmail Sent'}</span>
-            </Button>
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L12 9.366l8.073-5.873C21.69 2.28 24 3.434 24 5.457z" fill="#4285F4"/>
+                  <path d="M0 5.457v.727l12 8.727 12-8.727v-.727c0-2.023-2.31-3.178-3.927-1.964L12 9.366 3.927 3.493C2.31 2.28 0 3.434 0 5.457z" fill="#34A853"/>
+                  <path d="M18.545 11.73v9.273h3.819c.904 0 1.636-.732 1.636-1.636V11.73L12 16.64z" fill="#FBBC04"/>
+                  <path d="M1.636 21.003h3.819V11.73L0 16.64v2.727c0 .904.732 1.636 1.636 1.636z" fill="#EA4335"/>
+                  <path d="M12 16.64l-6.545-4.91v9.273h6.545V16.64z" fill="#C5221F"/>
+                  <path d="M18.545 11.73L12 16.64v4.363h6.545V11.73z" fill="#C5221F"/>
+                </svg>
+                <span className="ml-2">{isOpeningGmail ? 'Opening…' : 'Open Gmail Sent'}</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={() => { onClose(); router.push('/applications'); }}
+                className="flex-1"
+              >
+                <ExternalLink className="w-4 h-4 mr-2 flex-shrink-0" />
+                View Applications
+              </Button>
+            </div>
 
             <Button
               type="button"
               onClick={onClose}
               size="lg"
-              className="sm:min-w-[8rem]"
+              className="w-full"
             >
-              Close
+              Done
             </Button>
           </div>
         </CardContent>

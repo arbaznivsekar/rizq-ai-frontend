@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getJob, checkApplicationEligibility } from '@/lib/api';
 import { useJobSelection } from '@/contexts/JobSelectionContext';
@@ -41,7 +41,7 @@ export default function JobDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { selectedJobs, toggleJobSelection } = useJobSelection();
+  const { selectedJobs, selectedJobsData, toggleJobSelection } = useJobSelection();
   const { isAuthenticated } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
@@ -350,8 +350,62 @@ export default function JobDetailsPage() {
 
       </div>
 
-      {/* Bulk Apply Bar */}
-      <BulkApplyBar jobs={job ? [job] : []} />
+      {/* Bulk Apply Bar — passes current job + every other selected job so the
+          action bar count and the submit payload both reflect the full batch, not
+          just the single job being viewed on this page.                          */}
+      <BulkApplyBarWithSelection currentJob={job} selectedJobsData={selectedJobsData} />
     </div>
   );
+}
+
+/** Thin wrapper that builds the correct jobs array for BulkApplyBar */
+function BulkApplyBarWithSelection({
+  currentJob,
+  selectedJobsData,
+}: {
+  currentJob: Job | null;
+  selectedJobsData: Map<string, import('@/contexts/JobSelectionContext').SelectedJobData>;
+}) {
+  const jobs = useMemo(() => {
+    const map = new Map<string, {
+      _id: string; title: string; company: string; location: string;
+      description?: string; companyDomain?: string; logoUrl?: string; url?: string;
+      requirements?: string[];
+    }>();
+
+    // Always include the current job (with full details from the page fetch)
+    if (currentJob) {
+      map.set(currentJob._id, {
+        _id: currentJob._id,
+        title: currentJob.title,
+        company: currentJob.company,
+        location: currentJob.location,
+        description: currentJob.description,
+        companyDomain: currentJob.companyDomain,
+        logoUrl: currentJob.logoUrl,
+        url: currentJob.url,
+        requirements: currentJob.requirements,
+      });
+    }
+
+    // Include every other job that was selected on a different page
+    selectedJobsData.forEach((j, id) => {
+      if (!map.has(id)) {
+        map.set(id, {
+          _id: j._id,
+          title: j.title,
+          company: j.company,
+          location: j.location,
+          description: j.description,
+          companyDomain: j.companyDomain,
+          logoUrl: j.logoUrl,
+          url: j.url,
+        });
+      }
+    });
+
+    return Array.from(map.values()) as Parameters<typeof BulkApplyBar>[0]['jobs'];
+  }, [currentJob, selectedJobsData]);
+
+  return <BulkApplyBar jobs={jobs} />;
 }

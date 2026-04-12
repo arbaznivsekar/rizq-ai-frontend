@@ -4,7 +4,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { getDashboard, getQuickRecommendations, refreshRecommendations } from '@/lib/api';
+import { getDashboard, getQuickRecommendations, refreshRecommendations, getApplicationQuota } from '@/lib/api';
+import type { QuotaSummary } from '@/lib/api';
+import { BatchQuotaStatus } from '@/components/jobs/BatchQuotaStatus';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -85,6 +87,9 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState('ai-matches');
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const [quota, setQuota] = useState<QuotaSummary | null>(null);
+  const [isQuotaLoading, setIsQuotaLoading] = useState(true);
 
   const { selectedJobs, selectedJobsData, toggleJobSelection, clearSelection } = useJobSelection();
 
@@ -208,6 +213,15 @@ export default function DashboardPage() {
     const onVisible = () => { if (document.visibilityState === 'visible') fetchDashboard(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+  }, [isAuthenticated, authLoading]);
+
+  useEffect(() => {
+    if (!isAuthenticated || authLoading) return;
+    setIsQuotaLoading(true);
+    getApplicationQuota()
+      .then(setQuota)
+      .catch(() => { /* non-fatal */ })
+      .finally(() => setIsQuotaLoading(false));
   }, [isAuthenticated, authLoading]);
 
   const handleRefreshRecommendations = async () => {
@@ -429,6 +443,12 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* ── Daily Application Quota ── */}
+        <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-4 space-y-1.5">
+          <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Today's Application Quota</p>
+          <BatchQuotaStatus quota={quota} isLoading={isQuotaLoading} />
+        </div>
+
         {/* ── Selected Jobs Banner ── */}
         {selectedJobs.size > 0 && (
           <div className="rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden">
@@ -616,12 +636,12 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Company + Location */}
-                    <div className="flex items-center gap-3 text-[13px] text-slate-500 mb-2.5 flex-wrap">
+                    <div className="flex flex-col gap-1 text-[13px] text-slate-500 mb-2.5 min-w-0">
                       <span className="flex items-center gap-1.5 font-medium text-slate-700">
                         <CompanyLogo name={job.company} logoUrl={job.logoUrl} domain={job.companyDomain || job.url} size={18} />
-                        {job.company}
+                        <span className="truncate">{job.company}</span>
                       </span>
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 min-w-0">
                         <MapPin className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate">{job.location}</span>
                       </span>
@@ -629,11 +649,11 @@ export default function DashboardPage() {
 
                     {/* Match reasons */}
                     {job.matchReasons && job.matchReasons.length > 0 && (
-                      <div className="flex gap-3 mb-2.5">
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2.5">
                         {job.matchReasons.slice(0, 2).map((r, i) => (
-                          <span key={i} className="text-[11px] text-slate-500 flex items-center gap-0.5">
+                          <span key={i} className="text-[11px] text-slate-500 flex items-center gap-0.5 min-w-0">
                             <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />
-                            {r}
+                            <span className="truncate">{r}</span>
                           </span>
                         ))}
                       </div>

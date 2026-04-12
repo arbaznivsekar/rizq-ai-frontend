@@ -350,15 +350,19 @@ export const applyToJobs = async (jobIds: string[]) => {
 
 // NEW: Bulk Apply using Orchestrator (hides email discovery)
 export const bulkApplyToJobs = async (
-  jobIds: string[], 
+  jobIds: string[],
   customMessage?: string,
-  jobSummaries?: Record<string, string>
+  jobSummaries?: Record<string, string>,
+  preDiscoveredEmails?: Record<string, { recipientEmail: string; isVerified: boolean }>,
+  resumeDownloads?: Record<string, string>
 ) => {
   const response = await api.post('/workflow/apply', {
     jobIds,
     customMessage,
     includeResume: true,
-    jobSummaries
+    jobSummaries,
+    ...(preDiscoveredEmails && Object.keys(preDiscoveredEmails).length > 0 ? { preDiscoveredEmails } : {}),
+    ...(resumeDownloads && Object.keys(resumeDownloads).length > 0 ? { resumeDownloads } : {}),
   });
   return response.data;
 };
@@ -633,9 +637,13 @@ export const regenerateEmail = async (progressId: string, emailIndex: number) =>
 export const generateApplicationEmail = async (
   jobId: string,
   professionalSummary?: string
-): Promise<{ subject: string; body: string; tone: string }> => {
+): Promise<{ subject: string; body: string; tone: string; recipientEmail: string | null; isVerified: boolean }> => {
   const response = await api.post('/resumes/generate-email', { jobId, professionalSummary });
-  return response.data.email;
+  return {
+    ...response.data.email,
+    recipientEmail: response.data.recipientEmail ?? null,
+    isVerified: response.data.isVerified ?? false,
+  };
 };
 
 export const finalizeEmails = async (
@@ -649,5 +657,51 @@ export const finalizeEmails = async (
       : {}),
     ...(jobIds && jobIds.length > 0 ? { jobIds } : {})
   });
+  return response.data;
+};
+
+// ─── Application Quota ──────────────────────────────────────────────────────
+
+export type QuotaReason =
+  | 'daily_limit_reached'
+  | 'batch_cooldown'
+  | 'max_batches_reached';
+
+/**
+ * Current application quota state for the authenticated user.
+ * Mirrors the QuotaSummary type returned by GET /api/v1/applications/quota.
+ *
+ * ─── FUTURE: Razorpay paid tier ─────────────────────────────────────────────
+ * When paid tier is activated, `tier` will also accept 'paid' and
+ * dailyLimit / batchSize will reflect the paid-tier values (40 / 20).
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+export interface QuotaSummary {
+  /** User's current plan — 'free' today, 'paid' after Razorpay activation */
+  tier: 'free'; // FUTURE: 'free' | 'paid'
+  dailyLimit: number;        // free: 20  |  paid: 40
+  batchSize: number;         // free: 10  |  paid: 20
+  batchesPerDay: number;     // both: 2
+  batchCooldownHours: number; // both: 6
+  usedToday: number;
+  remainingToday: number;
+  batchesUsed: number;
+  batchesAllowed: number;
+  canApply: boolean;
+  reason?: QuotaReason;
+  /** ISO timestamp — when the next batch becomes available */
+  nextAvailableAt?: string;
+  /** ISO timestamp — next UTC midnight (daily quota reset) */
+  resetAt: string;
+  /** All-time count of applications sent to verified recruiter emails. Bulk apply unlocks at 10. */
+  verifiedSentCount: number;
+}
+
+/**
+ * Fetch the authenticated user's current application quota summary.
+ * Call on page load and after each successful batch submission to keep UI in sync.
+ */
+export const getApplicationQuota = async (): Promise<QuotaSummary> => {
+  const response = await api.get('/applications/quota');
   return response.data;
 };
